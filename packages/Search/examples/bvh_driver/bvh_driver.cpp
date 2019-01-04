@@ -116,11 +116,8 @@ makeSpatialQueries( int n_values, int n_queries, int n_neighbors,
     Kokkos::View<DataTransferKit::Within *, DeviceType> queries(
         Kokkos::ViewAllocateWithoutInitializing( "queries" ), n_queries );
     // radius chosen in order to control the number of results per query
-    // NOTE: minus "1+sqrt(3)/2 \approx 1.37" matches the size of the boxes
-    // inserted into the tree (mid-point between half-edge and half-diagonal)
     double const r = 2. * std::cbrt( static_cast<double>( n_neighbors ) * 3. /
-                                     ( 4. * M_PI ) ) -
-                     ( 1. + std::sqrt( 3. ) ) / 2.;
+                                     ( 4. * M_PI ) );
     using ExecutionSpace = typename DeviceType::execution_space;
     Kokkos::parallel_for( "bvh_driver:setup_radius_search_queries",
                           Kokkos::RangePolicy<ExecutionSpace>( 0, n_queries ),
