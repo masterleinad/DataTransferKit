@@ -20,6 +20,8 @@
 
 #include <point_clouds.hpp>
 
+#include <mpi.h>
+
 #include <chrono>
 #include <cmath> // cbrt
 #include <cstdlib>
@@ -257,6 +259,11 @@ class KokkosScopeGuard
 
 int main( int argc, char *argv[] )
 {
+    // This is necessary on summit and ascent
+    int required = MPI_THREAD_SERIALIZED;
+    int provided;
+    MPI_Init_thread(&argc, &argv, required, &provided);
+
     KokkosScopeGuard guard( argc, argv );
 
     bool const throw_exceptions = false;
@@ -342,6 +349,8 @@ int main( int argc, char *argv[] )
 #endif
 
     benchmark::RunSpecifiedBenchmarks();
+
+    MPI_Finalize();
 
     return EXIT_SUCCESS;
 }
