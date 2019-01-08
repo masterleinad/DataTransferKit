@@ -324,17 +324,50 @@ class KokkosScopeGuard
 
 #define REGISTER_BENCHMARK( TreeType )                                         \
     BENCHMARK_TEMPLATE( BM_construction, TreeType )                            \
-        ->Args( {n_values, source_point_cloud_type} )                          \
+        ->Args( {(int)1e4, 0} )                                                \
+        ->Args( {(int)1e5, 0} )                                                \
+        ->Args( {(int)1e6, 0} )                                                \
+        ->Args( {(int)1e7, 0} )                                                \
+        ->Args( {(int)1e8, 0} )                                                \
+        ->Args( {(int)1e4, 1} )                                                \
+        ->Args( {(int)1e5, 1} )                                                \
+        ->Args( {(int)1e6, 1} )                                                \
+        ->Args( {(int)1e7, 1} )                                                \
+        ->Args( {(int)1e8, 1} )                                                \
         ->UseManualTime()                                                      \
         ->Unit( benchmark::kMicrosecond );                                     \
     BENCHMARK_TEMPLATE( BM_knn_search, TreeType )                              \
-        ->Args( {n_values, n_queries, n_neighbors, source_point_cloud_type,    \
-                 target_point_cloud_type} )                                    \
+        ->Args( {(int)1e4, (int)1e4, 10, 0, 2} )                               \
+        ->Args( {(int)1e5, (int)1e5, 10, 0, 2} )                               \
+        ->Args( {(int)1e6, (int)1e6, 10, 0, 2} )                               \
+        ->Args( {(int)1e7, (int)1e7, 10, 0, 2} )                               \
+        ->Args( {(int)1e8, (int)1e8, 10, 0, 2} )                               \
+        ->Args( {(int)1e4, (int)1e4, 10, 1, 3} )                               \
+        ->Args( {(int)1e5, (int)1e5, 10, 1, 3} )                               \
+        ->Args( {(int)1e6, (int)1e6, 10, 1, 3} )                               \
+        ->Args( {(int)1e7, (int)1e7, 10, 1, 3} )                               \
+        ->Args( {(int)1e8, (int)1e8, 10, 1, 3} )                               \
         ->UseManualTime()                                                      \
         ->Unit( benchmark::kMicrosecond );                                     \
     BENCHMARK_TEMPLATE( BM_radius_search, TreeType )                           \
-        ->Args( {n_values, n_queries, n_neighbors, buffer_size,                \
-                 source_point_cloud_type, target_point_cloud_type} )           \
+        ->Args( {(int)1e4, (int)1e4, 10, 0, 0, 2} )                            \
+        ->Args( {(int)1e5, (int)1e5, 10, 0, 0, 2} )                            \
+        ->Args( {(int)1e6, (int)1e6, 10, 0, 0, 2} )                            \
+        ->Args( {(int)1e7, (int)1e7, 10, 0, 0, 2} )                            \
+        ->Args( {(int)1e8, (int)1e8, 10, 0, 0, 2} )                            \
+        ->Args( {(int)1e4, (int)1e4, 10, 0, 1, 3} )                            \
+        ->Args( {(int)1e5, (int)1e5, 10, 0, 1, 3} )                            \
+        ->Args( {(int)1e6, (int)1e6, 10, 0, 1, 3} )                            \
+        ->Args( {(int)1e7, (int)1e7, 10, 0, 1, 3} )                            \
+        ->Args( {(int)1e8, (int)1e8, 10, 0, 1, 3} )                            \
+        ->Args( {(int)1e4, (int)1e4, 10, 30, 0, 2} )                           \
+        ->Args( {(int)1e5, (int)1e5, 10, 30, 0, 2} )                           \
+        ->Args( {(int)1e6, (int)1e6, 10, 30, 0, 2} )                           \
+        ->Args( {(int)1e7, (int)1e7, 10, 35, 0, 2} )                           \
+        ->Args( {(int)1e8, (int)1e8, 10, 35, 0, 2} )                           \
+        ->Args( {(int)1e4, (int)1e4, 10, 35, 1, 3} )                           \
+        ->Args( {(int)1e5, (int)1e5, 10, 70, 1, 3} )                           \
+        ->Args( {(int)1e6, (int)1e6, 10, 135, 1, 3} )                          \
         ->UseManualTime()                                                      \
         ->Unit( benchmark::kMicrosecond );
 
@@ -376,8 +409,9 @@ int main( int argc, char *argv[] )
     to_point_cloud_enum["hollow_box"] = PointCloudType::hollow_box;
     to_point_cloud_enum["filled_sphere"] = PointCloudType::filled_sphere;
     to_point_cloud_enum["hollow_sphere"] = PointCloudType::hollow_sphere;
-    int source_point_cloud_type = to_point_cloud_enum.at( source_pt_cloud );
-    int target_point_cloud_type = to_point_cloud_enum.at( target_pt_cloud );
+    // Not necessary since we are hard-coding the values
+    // int source_point_cloud_type = to_point_cloud_enum.at( source_pt_cloud );
+    // int target_point_cloud_type = to_point_cloud_enum.at( target_pt_cloud );
 
     switch ( clp.parse( argc, argv, NULL ) )
     {
