@@ -6,6 +6,7 @@
 # wrong and thus, we cannot check the version during the configuration step.
 FIND_PACKAGE(benchmark REQUIRED)
 
+INCLUDE_DIRECTORIES(SYSTEM ${DataTransferKit_SOURCE_DIR}/ext/nanoflann/include)
 TRIBITS_ADD_EXECUTABLE(
   bvh
   SOURCES bvh_driver.cpp

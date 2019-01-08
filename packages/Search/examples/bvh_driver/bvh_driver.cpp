@@ -10,6 +10,7 @@
  ****************************************************************************/
 
 #include "../test/DTK_BoostRTreeHelpers.hpp"
+#include "../test/DTK_NanoflannAdapters.hpp"
 
 #include <DTK_LinearBVH.hpp>
 
@@ -59,6 +60,89 @@ class BoostRTree
 
   private:
     BoostRTreeHelpers::RTree<DataTransferKit::Point> _tree;
+};
+#endif
+
+#ifdef KOKKOS_ENABLE_SERIAL
+class NanoflannKDTree
+{
+  public:
+    using DatasetAdapter =
+        DataTransferKit::NanoflannPointCloudAdapter<Kokkos::HostSpace>;
+    using DistanceType = nanoflann::L2_Simple_Adaptor<double, DatasetAdapter>;
+    using KDTree =
+        nanoflann::KDTreeSingleIndexAdaptor<DistanceType, DatasetAdapter, 3,
+                                            size_t>;
+    using DeviceType = Kokkos::Device<Kokkos::Serial, Kokkos::HostSpace>;
+    using device_type = DeviceType;
+
+    NanoflannKDTree( Kokkos::View<DataTransferKit::Point *, DeviceType> points )
+        : _dataset_adapter( points )
+        , _tree( 3, _dataset_adapter )
+    {
+        _tree.buildIndex();
+    }
+
+    template <typename Query>
+    void query( Kokkos::View<Query *, DeviceType> queries,
+                Kokkos::View<int *, DeviceType> &indices,
+                Kokkos::View<int *, DeviceType> &offset )
+    {
+        unsigned int const n_queries = queries.extent( 0 );
+        Kokkos::realloc( offset, n_queries + 1 );
+        std::vector<std::pair<size_t, double>> returned_indices_distances;
+        for ( unsigned int i = 0; i < n_queries; ++i )
+        {
+            size_t const k = queries( i )._k;
+            double const *const query_point = queries( i )._geometry._coords;
+            std::vector<size_t> query_indices( k );
+            std::vector<double> distances_sq( k );
+            offset( i ) = _tree.knnSearch( query_point, k, query_indices.data(),
+                                           distances_sq.data() );
+            for ( int j = 0; j < offset( j ); ++j )
+                returned_indices_distances.push_back( std::make_pair(
+                    query_indices[j], std::sqrt( distances_sq[j] ) ) );
+        }
+        DataTransferKit::exclusivePrefixSum( offset );
+        unsigned int const n_results = DataTransferKit::lastElement( offset );
+        Kokkos::realloc( indices, n_results );
+        for ( unsigned int i = 0; i < n_queries; ++i )
+            for ( int j = offset( i ); j < offset( i + 1 ); ++j )
+                indices( j ) = returned_indices_distances[j].first;
+    }
+
+    template <typename Query>
+    void query( Kokkos::View<Query *, DeviceType> queries,
+                Kokkos::View<int *, DeviceType> &indices,
+                Kokkos::View<int *, DeviceType> &offset, int )
+    {
+        unsigned int const n_queries = queries.extent( 0 );
+        Kokkos::realloc( offset, n_queries + 1 );
+        std::vector<std::pair<size_t, double>> returned_indices_distances;
+        for ( unsigned int i = 0; i < n_queries; ++i )
+        {
+            auto const sphere = queries( i )._geometry;
+            double const radius = sphere.radius();
+            double const *const centroid = sphere.centroid()._coords;
+            std::vector<std::pair<size_t, double>> ret_matches;
+            nanoflann::SearchParams params;
+            offset( i ) = _tree.radiusSearch( centroid, radius * radius,
+                                              ret_matches, params );
+            returned_indices_distances.insert( returned_indices_distances.end(),
+                                               ret_matches.begin(),
+                                               ret_matches.end() );
+        }
+        DataTransferKit::exclusivePrefixSum( offset );
+        unsigned int const n_results = DataTransferKit::lastElement( offset );
+        Kokkos::realloc( indices, n_results );
+        for ( unsigned int i = 0; i < n_queries; ++i )
+            for ( int j = offset( i ); j < offset( i + 1 ); ++j )
+                indices( j ) = returned_indices_distances[j].first;
+    }
+
+  private:
+    DatasetAdapter _dataset_adapter;
+    KDTree _tree;
 };
 #endif
 
@@ -259,7 +343,7 @@ int main( int argc, char *argv[] )
     // This is necessary on summit and ascent
     int required = MPI_THREAD_SERIALIZED;
     int provided;
-    MPI_Init_thread(&argc, &argv, required, &provided);
+    MPI_Init_thread( &argc, &argv, required, &provided );
 
     KokkosScopeGuard guard( argc, argv );
 
@@ -343,6 +427,10 @@ int main( int argc, char *argv[] )
 
 #if defined( HAVE_DTK_BOOST ) && defined( KOKKOS_ENABLE_SERIAL )
     REGISTER_BENCHMARK( BoostRTree );
+#endif
+
+#ifdef KOKKOS_ENABLE_SERIAL
+    REGISTER_BENCHMARK( NanoflannKDTree );
 #endif
 
     benchmark::RunSpecifiedBenchmarks();
