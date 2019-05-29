@@ -128,6 +128,8 @@ BoundingVolumeHierarchy<DeviceType>::BoundingVolumeHierarchy(
           Kokkos::ViewAllocateWithoutInitializing( "internal_and_leaf_nodes" ),
           _size > 0 ? 2 * _size - 1 : 0 )
 {
+    Kokkos::Profiling::pushRegion( "DTK:BVH:construction" );
+
     // FIXME can be relaxed
     static_assert(
         Kokkos::is_view<Primitives>::value,
@@ -146,9 +148,14 @@ BoundingVolumeHierarchy<DeviceType>::BoundingVolumeHierarchy(
         return;
     }
 
+    Kokkos::Profiling::pushRegion( "DTK:BVH:calculate_scene_bounding_box" );
+
     // determine the bounding box of the scene
     Details::TreeConstruction<DeviceType>::calculateBoundingBoxOfTheScene(
         primitives, getBoundingVolume( getRoot() ) );
+
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion( "DTK:BVH:assign_morton_codes" );
 
     // calculate morton code of all objects
     Kokkos::View<unsigned int *, DeviceType> morton_indices(
@@ -156,16 +163,25 @@ BoundingVolumeHierarchy<DeviceType>::BoundingVolumeHierarchy(
     Details::TreeConstruction<DeviceType>::assignMortonCodes(
         primitives, morton_indices, getBoundingVolume( getRoot() ) );
 
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion(
+        "DTK:BVH:sort_morton_codes_and_init_leaves" );
+
     // sort them along the Z-order space-filling curve
     auto permutation_indices = Details::sortObjects( morton_indices );
     Details::TreeConstruction<DeviceType>::initializeLeafNodes(
         primitives, permutation_indices, getLeafNodes() );
 
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion( "DTK:BVH:generate_hierarchy" );
     // generate bounding volume hierarchy
     Kokkos::View<int *, DeviceType> parents(
         Kokkos::ViewAllocateWithoutInitializing( "parents" ), 2 * size() - 1 );
     Details::TreeConstruction<DeviceType>::generateHierarchy(
         morton_indices, getLeafNodes(), getInternalNodes(), parents );
+
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion( "DTK:BVH:calculate_bounding_volumes" );
 
     // calculate bounding volume for each internal node by walking the
     // hierarchy toward the root
@@ -173,6 +189,9 @@ BoundingVolumeHierarchy<DeviceType>::BoundingVolumeHierarchy(
         DeviceType>::calculateInternalNodesBoundingVolumes( getLeafNodes(),
                                                             getInternalNodes(),
                                                             parents );
+
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::popRegion();
 }
 
 } // namespace DataTransferKit
