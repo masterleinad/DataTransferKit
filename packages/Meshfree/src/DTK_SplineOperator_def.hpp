@@ -19,7 +19,6 @@
 #include <BelosLinearProblem.hpp>
 #include <BelosTpetraAdapter.hpp>
 #include <BelosBlockGmresSolMgr.hpp>
-#include <BelosSolverFactory.hpp>
 
 namespace DataTransferKit
 {
@@ -145,10 +144,10 @@ void SplineOperator<
     Teuchos::RCP<Teuchos::ParameterList> params;
     // params->set(...);
     // create a solver manager
-     Belos::SolverFactory<ScalarType, VectorType, OperatorType> factory;
+    /* Belos::SolverFactory<ScalarType, VectorType, OperatorType> factory;
      Teuchos::RCP<Belos::SolverManager<ScalarType, VectorType, OperatorType> > solver =
-    factory.create ("GMRES", params);
-    //Belos::BlockGmresSolMgr<ScalarType,VectorType,OperatorType> CGsolver( problem, params );
+    factory.create ("GMRES", params);*/
+    Belos::BlockGmresSolMgr<ScalarType,VectorType,OperatorType> CGsolver( problem, params );
     // solve the linear problem
     //Belos::ReturnType ret = CGsolver.solve();
     // get the solution from the problem
