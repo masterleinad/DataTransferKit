@@ -18,6 +18,7 @@
 #include <DTK_DetailsNearestNeighborOperatorImpl.hpp> // fetch
 #include <BelosLinearProblem.hpp>
 #include <BelosTpetraAdapter.hpp>
+#include <BelosBlockCGSolMgr.hpp>
 
 namespace DataTransferKit
 {
@@ -132,18 +133,19 @@ void SplineOperator<
     using VectorType = Tpetra::MultiVector<>;
     using MatrixType = Tpetra::CrsMatrix<>;
     using OperatorType = Tpetra::Operator<>;
+    using ScalarType = double;
 
     auto source = Teuchos::rcp( new VectorType);
     auto destination = Teuchos::rcp( new VectorType);
 
     // create a linear problem
-    auto problem
-    = Teuchos::rcp (new Belos::LinearProblem<double,VectorType,OperatorType>(_crs_matrix, source, destination));
+    auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, source, destination));
 
     // create a parameter list
-    //Teuchos::RCP<Teuchos::ParameterList> params;params->set(...);
+    Teuchos::RCP<Teuchos::ParameterList> params;
+    // params->set(...);
     // create a solver manager
-    //Belos::BlockCGSolMgr<ScalarType,MV,OP> CGsolver( problem, params );
+    //Belos::BlockCGSolMgr<ScalarType,VectorType,OperatorType> CGsolver( problem, params );
     // solve the linear problem
     //Belos::ReturnType ret = CGsolver.solve();
     // get the solution from the problem
