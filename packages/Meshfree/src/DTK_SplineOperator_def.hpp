@@ -123,15 +123,15 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     auto teuchos_comm = Teuchos::rcp(new Teuchos::MpiComm<local_ordinal_type>(comm));
     MPI_Allreduce(&_n_source_points, &n_global_points, 1, MPI_INT, MPI_SUM, comm);
     constexpr global_ordinal_type indexBase = 0;
-    auto map = Teuchos::rcp (new Tpetra::Map<> (n_global_points, indexBase, teuchos_comm));
+    _map = Teuchos::rcp (new Tpetra::Map<> (n_global_points, indexBase, teuchos_comm));
 
-    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(map, 3));
+    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_map, 3));
     // Fill the sparse matrix, one row at a time.
     const scalar_type two = static_cast<scalar_type> (2.0);
     const scalar_type negOne = static_cast<scalar_type> (-1.0);
     for (local_ordinal_type lclRow = 0; lclRow < static_cast<local_ordinal_type> (_n_source_points); ++lclRow) 
     {
-      const global_ordinal_type gblRow = map->getGlobalElement (lclRow);
+      const global_ordinal_type gblRow = _map->getGlobalElement (lclRow);
       // _crs_matrix(0, 0:1) = [2, -1]
       if (gblRow == 0) 
       {
@@ -171,12 +171,13 @@ void SplineOperator<
     using OperatorType = Tpetra::Operator<>;
     using ScalarType = double;
 
-    auto source = Teuchos::rcp( new VectorType);
-    auto destination = Teuchos::rcp( new VectorType);
+    auto source = Teuchos::rcp( new VectorType(_map, 1));
+    auto destination = Teuchos::rcp( new VectorType(_map, 1));
 
     // copy source_values to source
 
     auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, source, destination));
+    problem->setProblem();
 
     Teuchos::RCP<Teuchos::ParameterList> params;
     // params->set(...);
