@@ -137,21 +137,15 @@ void SplineOperator<
     auto source = Teuchos::rcp( new VectorType);
     auto destination = Teuchos::rcp( new VectorType);
 
-    // create a linear problem
     auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, source, destination));
 
-    // create a parameter list
     Teuchos::RCP<Teuchos::ParameterList> params;
     // params->set(...);
-    // create a solver manager
-    /* Belos::SolverFactory<ScalarType, VectorType, OperatorType> factory;
-     Teuchos::RCP<Belos::SolverManager<ScalarType, VectorType, OperatorType> > solver =
-    factory.create ("GMRES", params);*/
-    Belos::BlockGmresSolMgr<ScalarType,VectorType,OperatorType> CGsolver( problem, params );
-    // solve the linear problem
-    //Belos::ReturnType ret = CGsolver.solve();
-    // get the solution from the problem
-    //Teuchos::RCP< MV > sol = problem->getLHS()
+    Belos::BlockGmresSolMgr<ScalarType,VectorType,OperatorType> solver( problem, params );
+    auto ret = solver.solve();
+    (void) ret;
+    DTK_REQUIRE(ret == Belos::Converged);
+    auto solution = problem->getLHS();
 
     /*// Apply A-1 (P^T phi)
     auto new_target_values = Details::SplineOperatorImpl<
