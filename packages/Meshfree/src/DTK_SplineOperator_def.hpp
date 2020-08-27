@@ -16,6 +16,8 @@
 #include <DTK_DBC.hpp>
 #include <DTK_DetailsSplineOperatorImpl.hpp>
 #include <DTK_DetailsNearestNeighborOperatorImpl.hpp> // fetch
+#include <BelosLinearProblem.hpp>
+#include <BelosTpetraAdapter.hpp>
 
 namespace DataTransferKit
 {
@@ -34,7 +36,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     , _ranks( "ranks", 0 )
     , _indices( "indices", 0 )
     , _coeffs( "polynomial_coefficients", 0 )
-    , _crs_matrix(Teuchos::RCP<Tpetra::Map<> > {}, 0)
+    , _crs_matrix(rcp (new Tpetra::CrsMatrix<>(Teuchos::RCP<Tpetra::Map<> > {}, 0)))
 {
     DTK_REQUIRE( source_points.extent_int( 1 ) ==
                  target_points.extent_int( 1 ) );
@@ -127,11 +129,31 @@ void SplineOperator<
     source_values = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
         _comm, _ranks, _indices, source_values );
 
-    // Apply A-1 (P^T phi)
+    using VectorType = Tpetra::MultiVector<>;
+    using MatrixType = Tpetra::CrsMatrix<>;
+    using OperatorType = Tpetra::Operator<>;
+
+    auto source = Teuchos::rcp( new VectorType);
+    auto destination = Teuchos::rcp( new VectorType);
+
+    // create a linear problem
+    auto problem
+    = Teuchos::rcp (new Belos::LinearProblem<double,VectorType,OperatorType>(_crs_matrix, source, destination));
+
+    // create a parameter list
+    //Teuchos::RCP<Teuchos::ParameterList> params;params->set(...);
+    // create a solver manager
+    //Belos::BlockCGSolMgr<ScalarType,MV,OP> CGsolver( problem, params );
+    // solve the linear problem
+    //Belos::ReturnType ret = CGsolver.solve();
+    // get the solution from the problem
+    //Teuchos::RCP< MV > sol = problem->getLHS()
+
+    /*// Apply A-1 (P^T phi)
     auto new_target_values = Details::SplineOperatorImpl<
         DeviceType>::computeTargetValues( _offset, _coeffs, source_values );
 
-    Kokkos::deep_copy( target_values, new_target_values );
+    Kokkos::deep_copy( target_values, new_target_values );*/
 }
 
 } // end namespace DataTransferKit

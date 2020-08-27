@@ -25,7 +25,7 @@ namespace DataTransferKit
 
 /**
  * This class implements a function reconstruction technique for arbitrary point
- * cloud based on a moving least square discretization. In this method, support
+ * cloud based on a spline discretization. In this method, support
  * and subsequently the data transfer operator is constructed through solutions
  * to local least square kernels defined by compactly supported radial basis
  * functions.
@@ -59,7 +59,7 @@ class SplineOperator : public PointCloudOperator<DeviceType>
     Kokkos::View<int *, DeviceType> _ranks;
     Kokkos::View<int *, DeviceType> _indices;
     Kokkos::View<double *, DeviceType> _coeffs;
-    Tpetra::CrsMatrix<> _crs_matrix;
+    Teuchos::RCP<Tpetra::CrsMatrix<>> _crs_matrix;
 };
 
 } // end namespace DataTransferKit
