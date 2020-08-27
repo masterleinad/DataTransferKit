@@ -37,7 +37,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     , _ranks( "ranks", 0 )
     , _indices( "indices", 0 )
     , _coeffs( "polynomial_coefficients", 0 )
-    , _crs_matrix(rcp (new Tpetra::CrsMatrix<>(Teuchos::RCP<Tpetra::Map<> > {}, 0)))
 {
     DTK_REQUIRE( source_points.extent_int( 1 ) ==
                  target_points.extent_int( 1 ) );
@@ -113,6 +112,44 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     _coeffs = Details::SplineOperatorImpl<
         DeviceType>::computePolynomialCoefficients( _offset, inv_a, p, phi,
                                                     PolynomialBasis::size );
+
+
+    // build matrix
+    using global_ordinal_type = typename Tpetra::Vector<>::global_ordinal_type;
+    using local_ordinal_type = typename Tpetra::Vector<>::local_ordinal_type;
+    using scalar_type = typename Tpetra::Vector<>::scalar_type;
+
+    int n_global_points;
+    auto teuchos_comm = Teuchos::rcp(new Teuchos::MpiComm<local_ordinal_type>(comm));
+    MPI_Allreduce(&_n_source_points, &n_global_points, 1, MPI_INT, MPI_SUM, comm);
+    constexpr global_ordinal_type indexBase = 0;
+    auto map = Teuchos::rcp (new Tpetra::Map<> (n_global_points, indexBase, teuchos_comm));
+
+    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(map, 3));
+    // Fill the sparse matrix, one row at a time.
+    const scalar_type two = static_cast<scalar_type> (2.0);
+    const scalar_type negOne = static_cast<scalar_type> (-1.0);
+    for (local_ordinal_type lclRow = 0; lclRow < static_cast<local_ordinal_type> (_n_source_points); ++lclRow) 
+    {
+      const global_ordinal_type gblRow = map->getGlobalElement (lclRow);
+      // _crs_matrix(0, 0:1) = [2, -1]
+      if (gblRow == 0) 
+      {
+        _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow, gblRow + 1), Teuchos::tuple<scalar_type> (two, negOne));
+      }
+      // _crs_matrix(N-1, N-2:N-1) = [-1, 2]
+      else if (static_cast<int> (gblRow) == n_global_points - 1) 
+      {
+        _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow - 1, gblRow), Teuchos::tuple<scalar_type> (negOne, two));
+      }
+      // _crs_matrix(i, i-1:i+1) = [-1, 2, -1]
+      else 
+      {
+        _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow - 1, gblRow, gblRow + 1), Teuchos::tuple<scalar_type> (negOne, two, negOne));
+      }
+    }
+    // Tell the sparse matrix that we are done adding entries to it.
+    _crs_matrix->fillComplete ();
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,
@@ -137,6 +174,8 @@ void SplineOperator<
     auto source = Teuchos::rcp( new VectorType);
     auto destination = Teuchos::rcp( new VectorType);
 
+    // copy source_values to source
+
     auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, source, destination));
 
     Teuchos::RCP<Teuchos::ParameterList> params;
@@ -147,11 +186,7 @@ void SplineOperator<
     DTK_REQUIRE(ret == Belos::Converged);
     auto solution = problem->getLHS();
 
-    /*// Apply A-1 (P^T phi)
-    auto new_target_values = Details::SplineOperatorImpl<
-        DeviceType>::computeTargetValues( _offset, _coeffs, source_values );
-
-    Kokkos::deep_copy( target_values, new_target_values );*/
+    // copy solution to target_values
 }
 
 } // end namespace DataTransferKit
