@@ -41,6 +41,9 @@ template <typename DeviceType,
 class SplineOperator : public PointCloudOperator<DeviceType>
 {
     using ExecutionSpace = typename DeviceType::execution_space;
+     using VectorType = Tpetra::MultiVector<>;
+    using OperatorType = Tpetra::Operator<>;
+    using ScalarType = double;
 
   public:
     SplineOperator(
@@ -60,7 +63,11 @@ class SplineOperator : public PointCloudOperator<DeviceType>
     Kokkos::View<int *, DeviceType> _indices;
     Kokkos::View<double *, DeviceType> _coeffs;
     Teuchos::RCP<Tpetra::CrsMatrix<>> _crs_matrix;
-    Teuchos::RCP<Tpetra::Map<>> _map;
+    Teuchos::RCP<Tpetra::Map<>> _destination_map;
+    Teuchos::RCP<Tpetra::Map<>> _source_map;
+    std::vector<int> cumulative_points_per_process;
+    Teuchos::RCP<Tpetra::MultiVector<>> _source;
+    Teuchos::RCP<Tpetra::MultiVector<>> _destination;
 };
 
 } // end namespace DataTransferKit

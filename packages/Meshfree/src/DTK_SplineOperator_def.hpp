@@ -72,7 +72,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     int n_processes = 0;
     MPI_Comm_size(MPI_COMM_WORLD, &n_processes);
 
-    std::vector<int> cumulative_points_per_process(n_processes+1);
+    cumulative_points_per_process.resize(n_processes+1);
     MPI_Allgather(&local_cumulative_points, 1, MPI_INT, &(cumulative_points_per_process[1]), 1, MPI_INT, comm);
 
     // collect all the points we need locally and their global index
@@ -91,7 +91,9 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     
     // create a map
     auto teuchos_comm = Teuchos::rcp(new Teuchos::MpiComm<int>(comm));
-    Tpetra::Map<> source_map(cumulative_points_per_process.back(), kokkos_indices, 0, teuchos_comm);  
+    _source_map = Teuchos::rcp( new Tpetra::Map<>(cumulative_points_per_process.back(), kokkos_indices, 0, teuchos_comm));  
+
+    _source = Teuchos::rcp( new VectorType(_source_map, 1));
 
     // Transform source points
     source_points = Details::SplineOperatorImpl<
@@ -146,25 +148,28 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
 
     // build matrix
-    int n_global_points;
-    MPI_Allreduce(&_n_source_points, &n_global_points, 1, MPI_INT, MPI_SUM, comm);
+    int n_global_target_points;
+    int n_local_target_points = _offset.extent( 0 ) - 1;
+    MPI_Allreduce(&n_local_target_points, &n_global_target_points, 1, MPI_INT, MPI_SUM, comm);
     constexpr global_ordinal_type indexBase = 0;
-    _map = Teuchos::rcp (new Tpetra::Map<> (n_global_points, indexBase, teuchos_comm));
+    _destination_map = Teuchos::rcp (new Tpetra::Map<> (n_global_target_points, n_local_target_points, indexBase, teuchos_comm));
 
-    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_map, 3));
+    _destination = Teuchos::rcp( new VectorType(_destination_map, 1));
+
+    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_destination_map, 3));
     // Fill the sparse matrix, one row at a time.
     const scalar_type two = static_cast<scalar_type> (2.0);
     const scalar_type negOne = static_cast<scalar_type> (-1.0);
     for (local_ordinal_type lclRow = 0; lclRow < static_cast<local_ordinal_type> (_n_source_points); ++lclRow) 
     {
-      const global_ordinal_type gblRow = _map->getGlobalElement (lclRow);
+      const global_ordinal_type gblRow = _destination_map->getGlobalElement (lclRow);
       // _crs_matrix(0, 0:1) = [2, -1]
       if (gblRow == 0) 
       {
         _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow, gblRow + 1), Teuchos::tuple<scalar_type> (two, negOne));
       }
       // _crs_matrix(N-1, N-2:N-1) = [-1, 2]
-      else if (static_cast<int> (gblRow) == n_global_points - 1) 
+      else if (static_cast<int> (gblRow) == n_global_target_points - 1) 
       {
         _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow - 1, gblRow), Teuchos::tuple<scalar_type> (negOne, two));
       }
@@ -193,16 +198,11 @@ void SplineOperator<
     source_values = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
         _comm, _ranks, _indices, source_values );
 
-    using VectorType = Tpetra::MultiVector<>;
-    using OperatorType = Tpetra::Operator<>;
-    using ScalarType = double;
-
-    auto source = Teuchos::rcp( new VectorType(_map, 1));
-    auto destination = Teuchos::rcp( new VectorType(_map, 1));
-
     // copy source_values to source
+    for (unsigned int i=0; i<_ranks.extent(0); ++i)
+      _source->replaceGlobalValue(cumulative_points_per_process[_ranks(i)]+_indices(i),0,source_values(i));
 
-    auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, source, destination));
+    auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, _source, _destination));
     problem->setProblem();
 
     Teuchos::RCP<Teuchos::ParameterList> params;
@@ -214,6 +214,8 @@ void SplineOperator<
     auto solution = problem->getLHS();
 
     // copy solution to target_values
+    for(unsigned int i=0; i<target_values.size(); ++i)
+	    target_values(i) = solution->getLocalViewHost()(i,0);    
 }
 
 } // end namespace DataTransferKit
