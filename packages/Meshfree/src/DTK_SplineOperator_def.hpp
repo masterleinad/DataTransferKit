@@ -38,6 +38,10 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     , _indices( "indices", 0 )
     , _coeffs( "polynomial_coefficients", 0 )
 {
+    using global_ordinal_type = typename Tpetra::Vector<>::global_ordinal_type;
+    using local_ordinal_type = typename Tpetra::Vector<>::local_ordinal_type;
+    using scalar_type = typename Tpetra::Vector<>::scalar_type;
+
     DTK_REQUIRE( source_points.extent_int( 1 ) ==
                  target_points.extent_int( 1 ) );
     // FIXME for now let's assume 3D
@@ -61,6 +65,33 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // NOTE: This is the last collective.
     source_points = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
         _comm, _ranks, _indices, source_points );
+
+    int local_cumulative_points = 0;
+    MPI_Scan(&_n_source_points, &local_cumulative_points, 1, MPI_INT, MPI_SUM, comm);
+
+    int n_processes = 0;
+    MPI_Comm_size(MPI_COMM_WORLD, &n_processes);
+
+    std::vector<int> cumulative_points_per_process(n_processes+1);
+    MPI_Allgather(&local_cumulative_points, 1, MPI_INT, &(cumulative_points_per_process[1]), 1, MPI_INT, comm);
+
+    // collect all the points we need locally and their global index
+    std::vector<global_ordinal_type> required_indices;
+    required_indices.reserve(_ranks.size());
+    for (unsigned int i=0; i<_ranks.extent(0); ++i)
+      required_indices.push_back(cumulative_points_per_process[_ranks(i)]+_indices(i));
+
+    std::sort(required_indices.begin(), required_indices.end());
+    required_indices.erase(std::unique( required_indices.begin(), required_indices.end()), required_indices.end());
+
+    Kokkos::View<global_ordinal_type*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> kokkos_required_indices(required_indices.data(), required_indices.size());
+
+    Kokkos::View<global_ordinal_type *, DeviceType> kokkos_indices("kokkos_indices", required_indices.size());
+    Kokkos::deep_copy(kokkos_indices, kokkos_required_indices);     
+    
+    // create a map
+    auto teuchos_comm = Teuchos::rcp(new Teuchos::MpiComm<int>(comm));
+    Tpetra::Map<> source_map(cumulative_points_per_process.back(), kokkos_indices, 0, teuchos_comm);  
 
     // Transform source points
     source_points = Details::SplineOperatorImpl<
@@ -115,12 +146,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
 
     // build matrix
-    using global_ordinal_type = typename Tpetra::Vector<>::global_ordinal_type;
-    using local_ordinal_type = typename Tpetra::Vector<>::local_ordinal_type;
-    using scalar_type = typename Tpetra::Vector<>::scalar_type;
-
     int n_global_points;
-    auto teuchos_comm = Teuchos::rcp(new Teuchos::MpiComm<local_ordinal_type>(comm));
     MPI_Allreduce(&_n_source_points, &n_global_points, 1, MPI_INT, MPI_SUM, comm);
     constexpr global_ordinal_type indexBase = 0;
     _map = Teuchos::rcp (new Tpetra::Map<> (n_global_points, indexBase, teuchos_comm));
