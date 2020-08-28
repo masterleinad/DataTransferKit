@@ -160,7 +160,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // Fill the sparse matrix, one row at a time.
     const scalar_type two = static_cast<scalar_type> (2.0);
     const scalar_type negOne = static_cast<scalar_type> (-1.0);
-    for (local_ordinal_type lclRow = 0; lclRow < static_cast<local_ordinal_type> (_n_source_points); ++lclRow) 
+    for (local_ordinal_type lclRow = 0; lclRow < static_cast<local_ordinal_type> (n_local_target_points); ++lclRow) 
     {
       const global_ordinal_type gblRow = _destination_map->getGlobalElement (lclRow);
       // _crs_matrix(0, 0:1) = [2, -1]
