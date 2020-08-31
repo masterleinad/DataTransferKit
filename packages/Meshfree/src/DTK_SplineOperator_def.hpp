@@ -95,6 +95,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     _source = Teuchos::rcp( new VectorType(_source_map, 1));
 
+    std::cout << "before radius" << std::endl;
+
     // To build the radial basis function, we need to define the radius of the
     // radial basis function. Since we use kNN, we need to compute the radius.
     // We only need the coordinates of the source points because of the
@@ -102,6 +104,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     auto radius =
         Details::SplineOperatorImpl<DeviceType>::computeRadius(
             source_points, target_points, _offset );
+
+    std::cout << "before weights" << std::endl;
 
     // Build phi (weight matrix)
     auto phi =
@@ -119,9 +123,11 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_destination_map, 3));
 
+    std::cout << "before matrix" << std::endl;
+
     // upper right matrix and lower left matrix
     
-    for (local_ordinal_type i = 0; i < _n_source_points; ++i)
+    /*for (local_ordinal_type i = 0; i < _n_source_points; ++i)
     {
 	    _crs_matrix->insertGlobalValues(_n_source_points+i, 
 			                    Teuchos::tuple<global_ordinal_type>(0,1,2,3), 
@@ -130,19 +136,25 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
             _crs_matrix->insertGlobalValues(1, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,0)));
             _crs_matrix->insertGlobalValues(2, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,1)));
             _crs_matrix->insertGlobalValues(3, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,2)));
-    }
+    }*/
+
+    std::cout << "lower right" << std::endl;
 
     //lower right block
-    for (local_ordinal_type i=0; i<_n_source_points; ++i)
+    /*for (local_ordinal_type i=0; i<_n_source_points; ++i)
     {
 	    for (local_ordinal_type j=0; j<target_points.extent(0); ++j)
               _crs_matrix->insertGlobalValues(i, Teuchos::tuple<global_ordinal_type>(j),
 		                                 Teuchos::tuple<scalar_type>(phi(i,j)));
-    }
+    }*/
+
+    std::cout << "fill complete" << std::endl;
 
     //const global_ordinal_type gblRow = _destination_map->getGlobalElement (lclRow);
     // Tell the sparse matrix that we are done adding entries to it.
     _crs_matrix->fillComplete ();
+
+    std::cout << "fill comp;lete finished" << std::endl;
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,
@@ -152,6 +164,8 @@ void SplineOperator<
     apply( Kokkos::View<double const *, DeviceType> source_values,
            Kokkos::View<double *, DeviceType> target_values ) const
 {
+    std::cout << "start apply" << std::endl;
+
     // Precondition: check that the source and the target are properly sized
     DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
     DTK_REQUIRE( target_values.extent( 0 ) == _offset.extent( 0 ) - 1 );

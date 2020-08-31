@@ -124,9 +124,10 @@ struct SplineOperatorImpl
 		    Kokkos::View<int const *, DeviceType> offset,
                     RBF const & )
     {
+        auto const n_target_points = target_points.extent( 0 );
         auto const n_source_points = source_points.extent( 0 );
 
-        DTK_REQUIRE( source_points.extent_int( 1 ) == 3 );
+        DTK_REQUIRE( target_points.extent_int( 1 ) == 3 );
 
         // The argument of rbf is a distance because we have changed the
         // coordinate system such the target point is the origin of the new
@@ -134,7 +135,7 @@ struct SplineOperatorImpl
         Kokkos::View<double **, DeviceType> phi( "weights", n_source_points, target_points.extent(0));
         Kokkos::parallel_for(
             DTK_MARK_REGION( "compute_weights" ),
-            Kokkos::RangePolicy<ExecutionSpace>( 0, n_source_points ),
+            Kokkos::RangePolicy<ExecutionSpace>( 0, n_target_points ),
             KOKKOS_LAMBDA( int i ) {
 	     for ( int j = offset( i ); j < offset( i + 1 ); ++j )
                 {
