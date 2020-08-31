@@ -106,7 +106,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // Build phi (weight matrix)
     auto phi =
         Details::SplineOperatorImpl<DeviceType>::computeWeights(
-            source_points, radius, CompactlySupportedRadialBasisFunction() );
+            source_points, target_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 
     // build matrix
     int n_global_target_points;
@@ -118,9 +118,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     _destination = Teuchos::rcp( new VectorType(_destination_map, 1));
 
     _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_destination_map, 3));
-    // Fill the sparse matrix, one row at a time.
-    const scalar_type two = static_cast<scalar_type> (2.0);
-    const scalar_type negOne = static_cast<scalar_type> (-1.0);
 
     // upper right matrix and lower left matrix
     
@@ -138,7 +135,9 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     //lower right block
     for (local_ordinal_type i=0; i<_n_source_points; ++i)
     {
-//      _crs_matrix->insertGlobalValues
+	    for (local_ordinal_type j=0; j<target_points.extent(0); ++j)
+              _crs_matrix->insertGlobalValues(i, Teuchos::tuple<global_ordinal_type>(j),
+		                                 Teuchos::tuple<scalar_type>(phi(i,j)));
     }
 
     //const global_ordinal_type gblRow = _destination_map->getGlobalElement (lclRow);

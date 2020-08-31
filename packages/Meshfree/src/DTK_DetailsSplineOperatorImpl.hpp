@@ -70,35 +70,6 @@ struct SplineOperatorImpl
         return target_values;
     }
 
-    static Kokkos::View<Coordinate **, DeviceType> transformSourceCoordinates(
-        Kokkos::View<Coordinate const **, DeviceType> source_points,
-        Kokkos::View<int const *, DeviceType> offset,
-        Kokkos::View<Coordinate const **, DeviceType> target_points )
-    {
-        auto const n_source_points = source_points.extent( 0 );
-        auto const n_target_points = target_points.extent( 0 );
-
-        int const spatial_dim = 3;
-        DTK_REQUIRE( source_points.extent_int( 1 ) == spatial_dim );
-        DTK_REQUIRE( offset.extent( 0 ) == n_target_points + 1 );
-
-        // Change the coordinates of the source points to relative position to
-        // the target points
-        Kokkos::View<Coordinate **, DeviceType> new_source_points(
-            "transformed_source_coords", n_source_points, spatial_dim );
-        Kokkos::parallel_for(
-            DTK_MARK_REGION( "transform" ),
-            Kokkos::RangePolicy<ExecutionSpace>( 0, n_target_points ),
-            KOKKOS_LAMBDA( const int i ) {
-                for ( int j = offset( i ); j < offset( i + 1 ); j++ )
-                    for ( int k = 0; k < spatial_dim; k++ )
-                        new_source_points( j, k ) =
-                            source_points( j, k ) - target_points( i, k );
-            } );
-
-        return new_source_points;
-    }
-
     static Kokkos::View<double *, DeviceType>
     computeRadius( Kokkos::View<Coordinate const **, DeviceType> source_points,
 		   Kokkos::View<Coordinate const **, DeviceType> target_points, 
@@ -146,9 +117,11 @@ struct SplineOperatorImpl
     // template deduction. For some unknown reason, explicitly choosing the
     // value of the template parameter does not work.
     template <typename RBF>
-    static Kokkos::View<double *, DeviceType>
+    static Kokkos::View<double **, DeviceType>
     computeWeights( Kokkos::View<Coordinate const **, DeviceType> source_points,
+		    Kokkos::View<Coordinate const **, DeviceType> target_points,
                     Kokkos::View<double const *, DeviceType> radius,
+		    Kokkos::View<int const *, DeviceType> offset,
                     RBF const & )
     {
         auto const n_source_points = source_points.extent( 0 );
@@ -158,17 +131,20 @@ struct SplineOperatorImpl
         // The argument of rbf is a distance because we have changed the
         // coordinate system such the target point is the origin of the new
         // coordinate system.
-        Kokkos::View<double *, DeviceType> phi( "weights", n_source_points );
+        Kokkos::View<double **, DeviceType> phi( "weights", n_source_points, target_points.extent(0));
         Kokkos::parallel_for(
             DTK_MARK_REGION( "compute_weights" ),
             Kokkos::RangePolicy<ExecutionSpace>( 0, n_source_points ),
             KOKKOS_LAMBDA( int i ) {
-                RadialBasisFunction<RBF> rbf( radius( i ) );
-                phi( i ) = rbf( ArborX::Details::distance(
+	     for ( int j = offset( i ); j < offset( i + 1 ); ++j )
+                {
+                RadialBasisFunction<RBF> rbf( radius( j ) );
+                phi( i,j ) = rbf( ArborX::Details::distance(
                     ArborX::Point{{source_points( i, 0 ), source_points( i, 1 ),
                                    source_points( i, 2 )}},
-                    {0., 0., 0.} ) );
-            } );
+                    ArborX::Point{{target_points( j, 0), target_points(j,1), 
+		                   target_points( j, 2)}} ) );
+		}} );
         Kokkos::fence();
         return phi;
     }
