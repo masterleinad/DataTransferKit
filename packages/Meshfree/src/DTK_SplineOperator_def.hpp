@@ -95,57 +95,18 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     _source = Teuchos::rcp( new VectorType(_source_map, 1));
 
-    // Transform source points
-    source_points = Details::SplineOperatorImpl<
-        DeviceType>::transformSourceCoordinates( source_points, _offset,
-                                                 target_points );
-    target_points = Kokkos::View<Coordinate **, DeviceType>( "empty", 0, 0 );
-
-    // Build P (vandermonde matrix)
-    // P is a single 1D storage for multiple P_i matrices. Each matrix is of
-    // size (#source_points_for_specific_target_point, basis_size)
-    auto p =
-        Details::SplineOperatorImpl<DeviceType>::computeVandermonde(
-            source_points, PolynomialBasis() );
-
     // To build the radial basis function, we need to define the radius of the
     // radial basis function. Since we use kNN, we need to compute the radius.
     // We only need the coordinates of the source points because of the
     // transformation of the coordinates.
     auto radius =
         Details::SplineOperatorImpl<DeviceType>::computeRadius(
-            source_points, _offset );
+            source_points, target_points, _offset );
 
     // Build phi (weight matrix)
     auto phi =
         Details::SplineOperatorImpl<DeviceType>::computeWeights(
             source_points, radius, CompactlySupportedRadialBasisFunction() );
-
-    // Build A (moment matrix)
-    auto a =
-        Details::SplineOperatorImpl<DeviceType>::computeMoments(
-            _offset, p, phi );
-
-    // TODO: it is computationally unnecessary to compute the pseudo-inverse as
-    // MxM (U*E^+*V) as it will later be just used to do MxV. We could instead
-    // return the (U,E^+,V) and do the MxV multiplication. But for now, it's OK.
-    auto t = Details::SplineOperatorImpl<DeviceType>::invertMoments(
-        a, PolynomialBasis::size );
-    auto inv_a = std::get<0>( t );
-
-    // std::get<1>(t) returns the number of undetermined system. However, this
-    // is not enough to know if we will lose order of accuracy. For example, if
-    // all the points are aligned, the system will be underdetermined. However
-    // this is not a problem if we found at least three points since this is
-    // enough to define a quadratic function. Therefore, not only we need to
-    // know the rank deficiency but also the dimension of the problem.
-
-    // NOTE: This assumes that the polynomial basis evaluated at {0,0,0} is
-    // going to be [1, 0, 0, ..., 0]^T.
-    _coeffs = Details::SplineOperatorImpl<
-        DeviceType>::computePolynomialCoefficients( _offset, inv_a, p, phi,
-                                                    PolynomialBasis::size );
-
 
     // build matrix
     int n_global_target_points;
@@ -160,25 +121,27 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // Fill the sparse matrix, one row at a time.
     const scalar_type two = static_cast<scalar_type> (2.0);
     const scalar_type negOne = static_cast<scalar_type> (-1.0);
-    for (local_ordinal_type lclRow = 0; lclRow < static_cast<local_ordinal_type> (n_local_target_points); ++lclRow) 
+
+    // upper right matrix and lower left matrix
+    
+    for (local_ordinal_type i = 0; i < _n_source_points; ++i)
     {
-      const global_ordinal_type gblRow = _destination_map->getGlobalElement (lclRow);
-      // _crs_matrix(0, 0:1) = [2, -1]
-      if (gblRow == 0) 
-      {
-        _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow, gblRow + 1), Teuchos::tuple<scalar_type> (two, negOne));
-      }
-      // _crs_matrix(N-1, N-2:N-1) = [-1, 2]
-      else if (static_cast<int> (gblRow) == n_global_target_points - 1) 
-      {
-        _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow - 1, gblRow), Teuchos::tuple<scalar_type> (negOne, two));
-      }
-      // _crs_matrix(i, i-1:i+1) = [-1, 2, -1]
-      else 
-      {
-        _crs_matrix->insertGlobalValues (gblRow, Teuchos::tuple<global_ordinal_type> (gblRow - 1, gblRow, gblRow + 1), Teuchos::tuple<scalar_type> (negOne, two, negOne));
-      }
+	    _crs_matrix->insertGlobalValues(_n_source_points+i, 
+			                    Teuchos::tuple<global_ordinal_type>(0,1,2,3), 
+					    Teuchos::tuple<scalar_type> (1, source_points(i, 0), source_points(i,1), source_points(i,2)));
+	    _crs_matrix->insertGlobalValues(0, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (1));
+            _crs_matrix->insertGlobalValues(1, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,0)));
+            _crs_matrix->insertGlobalValues(2, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,1)));
+            _crs_matrix->insertGlobalValues(3, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,2)));
     }
+
+    //lower right block
+    for (local_ordinal_type i=0; i<_n_source_points; ++i)
+    {
+//      _crs_matrix->insertGlobalValues
+    }
+
+    //const global_ordinal_type gblRow = _destination_map->getGlobalElement (lclRow);
     // Tell the sparse matrix that we are done adding entries to it.
     _crs_matrix->fillComplete ();
 }

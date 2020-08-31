@@ -101,6 +101,7 @@ struct SplineOperatorImpl
 
     static Kokkos::View<double *, DeviceType>
     computeRadius( Kokkos::View<Coordinate const **, DeviceType> source_points,
+		   Kokkos::View<Coordinate const **, DeviceType> target_points, 
                    Kokkos::View<int const *, DeviceType> offset )
     {
         unsigned int const n_target_points = offset.extent( 0 ) - 1;
@@ -124,7 +125,9 @@ struct SplineOperatorImpl
                         ArborX::Point{{source_points( j, 0 ),
                                        source_points( j, 1 ),
                                        source_points( j, 2 )}},
-                        {0., 0., 0.} );
+                        ArborX::Point{{target_points( i, 0 ),
+			               target_points( i, 1 ),
+				       target_points( i, 2 )}});
 
                     if ( new_distance > distance )
                         distance = new_distance;
