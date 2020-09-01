@@ -16,6 +16,7 @@
 #include <DTK_DBC.hpp>
 #include <DTK_DetailsSplineOperatorImpl.hpp>
 #include <DTK_DetailsNearestNeighborOperatorImpl.hpp> // fetch
+#include <DTK_PolynomialMatrix.hpp>
 #include <BelosLinearProblem.hpp>
 #include <BelosTpetraAdapter.hpp>
 #include <BelosBlockGmresSolMgr.hpp>
@@ -52,18 +53,18 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                                                            source_points );
     DTK_CHECK( !search_tree.empty() );
 
-    // For each target point, query the n_neighbors points closest to the
-    // target.
-    auto queries =
+    // For each source point, query the n_neighbors points closest to the
+    // source.
+    auto source_queries =
         Details::SplineOperatorImpl<DeviceType>::makeKNNQueries(
-            target_points, PolynomialBasis::size );
+            source_points, PolynomialBasis::size );
 
     // Perform the actual search.
-    search_tree.query( queries, _indices, _offset, _ranks );
+    search_tree.query( source_queries, _indices, _offset, _ranks );
 
     // Retrieve the coordinates of all source points that met the predicates.
     // NOTE: This is the last collective.
-    source_points = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
+    auto needed_source_points = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
         _comm, _ranks, _indices, source_points );
 
     int local_cumulative_points = 0;
@@ -95,6 +96,26 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     _source = Teuchos::rcp( new VectorType(_source_map, 1));
 
+     // Create the P matrix.
+    constexpr int DIM=3;
+    int offset = DIM + 1;
+    auto P_vec =
+        Teuchos::rcp(new VectorType(_source_map, offset ));
+    int di = 0;
+    for ( unsigned i = 0; i < _n_source_points; ++i )
+    {
+        P_vec->replaceGlobalValue( cumulative_points_per_process[teuchos_comm->getRank()]+i, 0, 1.0 );
+        di = DIM*i;
+        for ( int d = 0; d < DIM; ++d )
+        {
+            P_vec->replaceGlobalValue(
+                cumulative_points_per_process[teuchos_comm->getRank()]+i, d+1, source_points(i,d) );
+        }
+    }
+    auto d_P =Teuchos::rcp( new PolynomialMatrix(P_vec,_source_map,_source_map) );
+
+
+
     std::cout << "before radius" << std::endl;
 
     // To build the radial basis function, we need to define the radius of the
@@ -121,13 +142,13 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     _destination = Teuchos::rcp( new VectorType(_destination_map, 1));
 
-    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_destination_map, 3));
+    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_source_map, _n_source_points));
 
     std::cout << "before matrix" << std::endl;
 
     // upper right matrix and lower left matrix
     
-    /*for (local_ordinal_type i = 0; i < _n_source_points; ++i)
+    for (local_ordinal_type i = 0; i < _n_source_points; ++i)
     {
 	    _crs_matrix->insertGlobalValues(_n_source_points+i, 
 			                    Teuchos::tuple<global_ordinal_type>(0,1,2,3), 
@@ -136,17 +157,17 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
             _crs_matrix->insertGlobalValues(1, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,0)));
             _crs_matrix->insertGlobalValues(2, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,1)));
             _crs_matrix->insertGlobalValues(3, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,2)));
-    }*/
+    }
 
     std::cout << "lower right" << std::endl;
 
     //lower right block
-    /*for (local_ordinal_type i=0; i<_n_source_points; ++i)
+    for (local_ordinal_type i=0; i<_n_source_points; ++i)
     {
 	    for (local_ordinal_type j=0; j<target_points.extent(0); ++j)
               _crs_matrix->insertGlobalValues(i, Teuchos::tuple<global_ordinal_type>(j),
 		                                 Teuchos::tuple<scalar_type>(phi(i,j)));
-    }*/
+    }
 
     std::cout << "fill complete" << std::endl;
 
@@ -176,7 +197,7 @@ void SplineOperator<
 
     // copy source_values to source
     for (unsigned int i=0; i<_ranks.extent(0); ++i)
-      _source->replaceGlobalValue(cumulative_points_per_process[_ranks(i)]+_indices(i),0,source_values(i));
+      _source->replaceGlobalValue(4+cumulative_points_per_process[_ranks(i)]+_indices(i),0,source_values(i));
 
     auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, _source, _destination));
     problem->setProblem();
