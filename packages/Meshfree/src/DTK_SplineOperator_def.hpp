@@ -129,7 +129,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     std::cout << "before weights" << std::endl;
 
     // Build phi (weight matrix)
-    auto phi =
+    auto phi_M =
         Details::SplineOperatorImpl<DeviceType>::computeWeights(
             source_points, source_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 
@@ -151,7 +151,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     {
 	    for (local_ordinal_type j=0; j<target_points.extent(0); ++j)
               _crs_matrix->insertGlobalValues(i, Teuchos::tuple<global_ordinal_type>(j),
-		                                 Teuchos::tuple<scalar_type>(phi(i,j)));
+		                                  Teuchos::tuple<scalar_type>(phi_M(i,j)));
     }
 
     std::cout << "fill complete" << std::endl;
@@ -161,6 +161,10 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     _crs_matrix->fillComplete ();
 
     std::cout << "fill comp;lete finished" << std::endl;
+
+     auto phi_N =
+        Details::SplineOperatorImpl<DeviceType>::computeWeights(
+            source_points, target_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,
