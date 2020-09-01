@@ -114,7 +114,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     }
     auto d_P =Teuchos::rcp( new PolynomialMatrix(P_vec,_source_map,_source_map) );
 
-
+    // Create the M matrix
 
     std::cout << "before radius" << std::endl;
 
@@ -124,14 +124,14 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // transformation of the coordinates.
     auto radius =
         Details::SplineOperatorImpl<DeviceType>::computeRadius(
-            source_points, target_points, _offset );
+            source_points, source_points, _offset );
 
     std::cout << "before weights" << std::endl;
 
     // Build phi (weight matrix)
     auto phi =
         Details::SplineOperatorImpl<DeviceType>::computeWeights(
-            source_points, target_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
+            source_points, source_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 
     // build matrix
     int n_global_target_points;
@@ -145,21 +145,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_source_map, _n_source_points));
 
     std::cout << "before matrix" << std::endl;
-
-    // upper right matrix and lower left matrix
-    
-    for (local_ordinal_type i = 0; i < _n_source_points; ++i)
-    {
-	    _crs_matrix->insertGlobalValues(_n_source_points+i, 
-			                    Teuchos::tuple<global_ordinal_type>(0,1,2,3), 
-					    Teuchos::tuple<scalar_type> (1, source_points(i, 0), source_points(i,1), source_points(i,2)));
-	    _crs_matrix->insertGlobalValues(0, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (1));
-            _crs_matrix->insertGlobalValues(1, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,0)));
-            _crs_matrix->insertGlobalValues(2, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,1)));
-            _crs_matrix->insertGlobalValues(3, Teuchos::tuple<global_ordinal_type>(i), Teuchos::tuple<scalar_type> (source_points(i,2)));
-    }
-
-    std::cout << "lower right" << std::endl;
 
     //lower right block
     for (local_ordinal_type i=0; i<_n_source_points; ++i)
