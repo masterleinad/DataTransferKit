@@ -154,6 +154,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // Tell the sparse matrix that we are done adding entries to it.
     _crs_matrix->fillComplete ();
+           DTK_ENSURE( _crs_matrix->isFillComplete() );
 
     // N matrix
 
@@ -199,7 +200,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
                 }   
    crs_matrix_N->fillComplete( prolongated_map, _destination_map );
-
+       DTK_ENSURE( crs_matrix_N->isFillComplete() );
    
       // Create the Q matrix.
      {
