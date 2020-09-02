@@ -73,9 +73,11 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // For each source point, query the n_neighbors points closest to the
     // source.
+    constexpr int knn = PolynomialBasis::size;
+
     auto source_queries =
         Details::SplineOperatorImpl<DeviceType>::makeKNNQueries(
-            source_points, PolynomialBasis::size );
+            source_points, knn );
 
     // Perform the actual search.
     search_tree.query( source_queries, _indices, _offset, _ranks );
@@ -119,7 +121,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
             source_points, source_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 
     // build matrix
-    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_source_map, _n_source_points));
+    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_source_map, knn));
 
     std::cout << "before matrix" << std::endl;
 
@@ -139,6 +141,10 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                 _crs_matrix->insertGlobalValues(global_id, 
 				                Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)),
 						Teuchos::tuple<scalar_type>(phi_M(j)));
+		std::cout << "inserting (" << global_id << "," 
+			                   << Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)) << ","
+                                           << Teuchos::tuple<scalar_type>(phi_M(j)) << std::endl;
+
                 }
 
     // Tell the sparse matrix that we are done adding entries to it.
@@ -150,7 +156,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // source.
     auto target_queries =
         Details::SplineOperatorImpl<DeviceType>::makeKNNQueries(
-            target_points, PolynomialBasis::size );
+            target_points, knn );
 
     // Perform the actual search.
     search_tree.query( target_queries, target_indices, target_offset, target_ranks );
