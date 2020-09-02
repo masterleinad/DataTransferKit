@@ -139,7 +139,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
      cumulative_points_per_process.resize(n_processes+1);
      MPI_Allgather(&local_cumulative_points, 1, MPI_INT, &(cumulative_points_per_process[1]), 1, MPI_INT, comm);
 
-     for (local_ordinal_type i=0; i< n_local_target_points; ++i)
+     for (local_ordinal_type i=0; i< _n_source_points; ++i)
              for ( int j = _offset( i ); j < _offset( i + 1 ); ++j )
                 {
 			        const auto global_id = prolongated_map->getGlobalElement(i);
@@ -182,7 +182,24 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
             source_points, needed_source_points_Q, target_radius, target_offset, CompactlySupportedRadialBasisFunction() );
 
 
-   //....
+     //....
+  
+     auto crs_matrix_N = Teuchos::rcp(new Tpetra::CrsMatrix<>(_destination_map, knn));
+
+     for (local_ordinal_type i=0; i< n_local_target_points; ++i)
+             for ( int j = target_offset( i ); j < target_offset( i + 1 ); ++j )
+                {
+                                const auto global_id = _destination_map->getGlobalElement(i);
+                crs_matrix_N->insertGlobalValues(global_id,
+                                                Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)),
+                                                Teuchos::tuple<scalar_type>(phi_N(j)));
+                std::cout << "inserting (" << global_id << ","
+                                           << Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)) << ","
+                                           << Teuchos::tuple<scalar_type>(phi_N(j)) << std::endl;
+
+                }   
+   crs_matrix_N->fillComplete( prolongated_map, _destination_map );
+
    
       // Create the Q matrix.
      {
@@ -200,7 +217,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                 global_id, d+1, target_points(i,d) );
         }
     }
-    auto d_Q =Teuchos::rcp( new PolynomialMatrix(Q_vec,_destination_map,_destination_map) );
+    auto d_Q =Teuchos::rcp( new PolynomialMatrix(Q_vec,prolongated_map,_destination_map) );
      }
 }
 

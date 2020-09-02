@@ -139,6 +139,7 @@ struct SplineOperatorImpl
 	     for ( int j = offset( i ); j < offset( i + 1 ); ++j )
                 {
                 RadialBasisFunction<RBF> rbf( radius( j ) );
+		std::cout << "acessing " << i << " " << j << " out of " << needed_source_points.extent(0) << std::endl;
                 phi( j ) = rbf( ArborX::Details::distance(
                     ArborX::Point{{needed_source_points( i, 0 ), needed_source_points( i, 1 ),
                                    needed_source_points( i, 2 )}},
