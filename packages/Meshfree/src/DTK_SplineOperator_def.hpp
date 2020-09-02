@@ -17,6 +17,7 @@
 #include <DTK_DetailsSplineOperatorImpl.hpp>
 #include <DTK_DetailsNearestNeighborOperatorImpl.hpp> // fetch
 #include <DTK_PolynomialMatrix.hpp>
+#include <DTK_SplineProlongationOperator.hpp>
 #include <BelosLinearProblem.hpp>
 #include <BelosTpetraAdapter.hpp>
 #include <BelosBlockGmresSolMgr.hpp>
@@ -65,6 +66,10 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
 
     //------------Build the matrices-----
+   
+    constexpr int DIM=3; 
+    global_ordinal_type prolongation_offset = teuchos_comm->getRank() ? 0 : DIM + 1;
+    auto S = Teuchos::rcp( new SplineProlongationOperator(prolongation_offset,_source_map) );   
 
     // Build distributed search tree over the source points.
     ArborX::DistributedSearchTree<DeviceType> search_tree( _comm,
@@ -88,7 +93,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         _comm, _ranks, _indices, source_points );
 
      // Create the P matrix.
-    constexpr int DIM=3;
     int offset = DIM + 1;
     auto P_vec =
         Teuchos::rcp(new VectorType(_source_map, offset ));
