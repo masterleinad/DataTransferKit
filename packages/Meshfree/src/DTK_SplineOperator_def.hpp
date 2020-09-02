@@ -73,7 +73,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
    
     constexpr int DIM=3; 
     global_ordinal_type prolongation_offset = teuchos_comm->getRank() ? 0 : DIM + 1;
-    auto S = Teuchos::rcp( new SplineProlongationOperator(prolongation_offset,_source_map) );   
+    S = Teuchos::rcp( new SplineProlongationOperator(prolongation_offset,_source_map) );   
     // Get the operator map.
     auto prolongated_map = S->getRangeMap();
 
@@ -104,7 +104,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         for ( int d = 0; d < DIM; ++d )
             P_vec->replaceGlobalValue(global_id, d+1, source_points(i,d) );
     }
-    auto d_P =Teuchos::rcp( new PolynomialMatrix(P_vec,prolongated_map,prolongated_map) );
+    P =Teuchos::rcp( new PolynomialMatrix(P_vec,prolongated_map,prolongated_map) );
 
     // Create the M matrix
 
@@ -126,7 +126,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
             source_points, source_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 
     // build matrix
-    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(prolongated_map, knn));
+    auto crs_M = Teuchos::rcp(new Tpetra::CrsMatrix<>(prolongated_map, knn));
 
     std::cout << "before matrix" << std::endl;
 
@@ -143,7 +143,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
              for ( int j = _offset( i ); j < _offset( i + 1 ); ++j )
                 {
 			        const auto global_id = prolongated_map->getGlobalElement(i);
-                _crs_matrix->insertGlobalValues(global_id, 
+                crs_M->insertGlobalValues(global_id, 
 				                Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)),
 						Teuchos::tuple<scalar_type>(phi_M(j)));
 		std::cout << "inserting (" << global_id << "," 
@@ -153,8 +153,9 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                 }
 
     // Tell the sparse matrix that we are done adding entries to it.
-    _crs_matrix->fillComplete ();
-           DTK_ENSURE( _crs_matrix->isFillComplete() );
+    crs_M->fillComplete ();
+    DTK_ENSURE( crs_M->isFillComplete() );
+    M = crs_M;
 
     // N matrix
 
@@ -185,13 +186,13 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
      //....
   
-     auto crs_matrix_N = Teuchos::rcp(new Tpetra::CrsMatrix<>(_destination_map, knn));
+     auto crs_N = Teuchos::rcp(new Tpetra::CrsMatrix<>(_destination_map, knn));
 
      for (local_ordinal_type i=0; i< n_local_target_points; ++i)
              for ( int j = target_offset( i ); j < target_offset( i + 1 ); ++j )
                 {
                                 const auto global_id = _destination_map->getGlobalElement(i);
-                crs_matrix_N->insertGlobalValues(global_id,
+                crs_N->insertGlobalValues(global_id,
                                                 Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)),
                                                 Teuchos::tuple<scalar_type>(phi_N(j)));
                 std::cout << "inserting (" << global_id << ","
@@ -199,8 +200,9 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                                            << Teuchos::tuple<scalar_type>(phi_N(j)) << std::endl;
 
                 }   
-   crs_matrix_N->fillComplete( prolongated_map, _destination_map );
-       DTK_ENSURE( crs_matrix_N->isFillComplete() );
+       crs_N->fillComplete( prolongated_map, _destination_map );
+       DTK_ENSURE( crs_N->isFillComplete() );
+       N=crs_N;
    
       // Create the Q matrix.
      {
@@ -218,8 +220,14 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                 global_id, d+1, target_points(i,d) );
         }
     }
-    auto d_Q =Teuchos::rcp( new PolynomialMatrix(Q_vec,prolongated_map,_destination_map) );
+    Q =Teuchos::rcp( new PolynomialMatrix(Q_vec,prolongated_map,_destination_map) );
      }
+
+         DTK_ENSURE( Teuchos::nonnull(S) );
+    DTK_ENSURE( Teuchos::nonnull(P) );
+    DTK_ENSURE( Teuchos::nonnull(M) );
+    DTK_ENSURE( Teuchos::nonnull(Q) );
+    DTK_ENSURE( Teuchos::nonnull(N) );
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,

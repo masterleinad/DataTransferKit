@@ -73,6 +73,21 @@ class SplineOperator : public PointCloudOperator<DeviceType>
     std::vector<int> cumulative_points_per_process;
     Teuchos::RCP<Tpetra::MultiVector<>> _source;
     Teuchos::RCP<Tpetra::MultiVector<>> _destination;
+
+       // Prolongation operator.
+    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> S;
+
+    // Coefficient matrix polynomial component.
+    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> P;
+
+    // Coefficient matrix basis component.
+    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> M;
+
+    // Evaluation matrix polynomial component.
+    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> Q;
+
+    // Evaluation matrix basis component.
+    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> N;
 };
 
 } // end namespace DataTransferKit
