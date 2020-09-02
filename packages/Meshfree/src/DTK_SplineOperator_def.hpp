@@ -22,6 +22,14 @@
 #include <BelosTpetraAdapter.hpp>
 #include <BelosBlockGmresSolMgr.hpp>
 
+#include <Thyra_TpetraThyraWrappers.hpp>
+#include <Thyra_DefaultMultipliedLinearOp.hpp>
+#include <Thyra_DefaultScaledAdjointLinearOp.hpp>
+#include <Thyra_DefaultAddedLinearOp.hpp>
+#include <Thyra_LinearOpWithSolveFactoryHelpers.hpp>
+
+#include <Stratimikos_DefaultLinearSolverBuilder.hpp>
+
 namespace DataTransferKit
 {
 
@@ -228,6 +236,108 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     DTK_ENSURE( Teuchos::nonnull(M) );
     DTK_ENSURE( Teuchos::nonnull(Q) );
     DTK_ENSURE( Teuchos::nonnull(N) );
+
+
+
+
+     // Create an abstract wrapper for S.
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_range_vector_space_S =
+        Thyra::createVectorSpace<scalar_type>( S->getRangeMap() );
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_domain_vector_space_S =
+        Thyra::createVectorSpace<scalar_type>( S->getDomainMap() );
+    Teuchos::RCP<const Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> > thyra_S =
+        Teuchos::rcp( new Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type>() );
+    Teuchos::rcp_const_cast<Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> >(
+        thyra_S)->constInitialize(
+            thyra_range_vector_space_S, thyra_domain_vector_space_S, S );
+
+    // Create an abstract wrapper for P.
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_range_vector_space_P =
+        Thyra::createVectorSpace<scalar_type>( P->getRangeMap() );
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_domain_vector_space_P =
+        Thyra::createVectorSpace<scalar_type>( P->getDomainMap() );
+    Teuchos::RCP<const Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> > thyra_P =
+        Teuchos::rcp( new Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type>() );
+    Teuchos::rcp_const_cast<Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> >(
+        thyra_P)->constInitialize(
+            thyra_range_vector_space_P, thyra_domain_vector_space_P, P );
+
+    // Create an abstract wrapper for M.
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_range_vector_space_M =
+        Thyra::createVectorSpace<scalar_type>( M->getRangeMap() );
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_domain_vector_space_M =
+        Thyra::createVectorSpace<scalar_type>( M->getDomainMap() );
+    Teuchos::RCP<const Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> > thyra_M =
+        Teuchos::rcp( new Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type>() );
+    Teuchos::rcp_const_cast<Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> >(
+        thyra_M)->constInitialize(
+            thyra_range_vector_space_M, thyra_domain_vector_space_M, M );
+
+    // Create an abstract wrapper for Q.
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_range_vector_space_Q =
+        Thyra::createVectorSpace<scalar_type>( Q->getRangeMap() );
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_domain_vector_space_Q =
+        Thyra::createVectorSpace<scalar_type>( Q->getDomainMap() );
+    Teuchos::RCP<const Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> > thyra_Q =
+        Teuchos::rcp( new Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type>() );
+    Teuchos::rcp_const_cast<Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> >(
+        thyra_Q)->constInitialize(
+            thyra_range_vector_space_Q, thyra_domain_vector_space_Q, Q );
+
+
+      // Create an abstract wrapper for N.
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_range_vector_space_N =
+        Thyra::createVectorSpace<scalar_type>( N->getRangeMap() );
+    Teuchos::RCP<const Thyra::VectorSpaceBase<scalar_type> > thyra_domain_vector_space_N =
+        Thyra::createVectorSpace<scalar_type>( N->getDomainMap() );
+    Teuchos::RCP<const Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> > thyra_N =
+        Teuchos::rcp( new Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type>() );
+        Teuchos::rcp_const_cast<Thyra::TpetraLinearOp<scalar_type,local_ordinal_type,global_ordinal_type> >(
+            thyra_N)->constInitialize(
+                thyra_range_vector_space_N, thyra_domain_vector_space_N, N );
+
+    // COUPLING MATRIX ASSEMBLY: A = (Q + N)*[(P + M + P^T)^-1]*S
+    // Create a transpose of P.
+    Teuchos::RCP<const Thyra::LinearOpBase<scalar_type> > thyra_P_T =
+        Thyra::transpose<scalar_type>( thyra_P );
+
+    // Create a composite operator C = (P + M + P^T)
+    Teuchos::RCP<const Thyra::LinearOpBase<scalar_type> > thyra_PpM =
+        Thyra::add<scalar_type>( thyra_P, thyra_M );
+    Teuchos::RCP<const Thyra::LinearOpBase<scalar_type> > thyra_C =
+        Thyra::add<scalar_type>( thyra_PpM, thyra_P_T );
+
+    // If we didnt get stratimikos parameters from the input list, create some
+    // here.
+    /*if ( Teuchos::is_null(d_stratimikos_list) )
+    {
+        d_stratimikos_list = Teuchos::parameterList("Stratimikos");
+        Teuchos::updateParametersFromXmlString(
+            "<ParameterList name=\"Stratimikos\">"
+            "<Parameter name=\"Linear Solver Type\" type=\"string\" value=\"Belos\"/>"
+            "<Parameter name=\"Preconditioner Type\" type=\"string\" value=\"None\"/>"
+            "</ParameterList>"
+            ,
+            d_stratimikos_list.ptr()
+            );
+    }*/
+
+    // Create the inverse of the composite operator C.
+    Stratimikos::DefaultLinearSolverBuilder builder;
+    //builder.setParameterList( d_stratimikos_list );
+    Teuchos::RCP<Thyra::LinearOpWithSolveFactoryBase<scalar_type> > factory =
+        Thyra::createLinearSolveStrategy( builder );
+    Teuchos::RCP<const Thyra::LinearOpBase<scalar_type> > thyra_C_inv =
+        Thyra::inverse<scalar_type>( *factory, thyra_C );
+
+        // Create the composite operator B = (Q + N);
+    Teuchos::RCP<const Thyra::LinearOpBase<scalar_type> > thyra_B =
+        Thyra::add<scalar_type>( thyra_Q, thyra_N );
+
+    // Create the coupling matrix A = (B * C^-1 * S).
+    auto d_coupling_matrix =
+        Thyra::multiply<scalar_type>( thyra_B, thyra_C_inv, thyra_S );
+    DTK_ENSURE( Teuchos::nonnull(d_coupling_matrix) );
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,
