@@ -64,17 +64,18 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     _source_map = Teuchos::rcp (new Tpetra::Map<> (n_global_source_points, n_local_source_points, indexBase, teuchos_comm));
     _source = Teuchos::rcp( new VectorType(_source_map, 1));
 
+     // Build distributed search tree over the source points.
+    ArborX::DistributedSearchTree<DeviceType> search_tree( _comm,
+                                                           source_points );
+    DTK_CHECK( !search_tree.empty() );
 
     //------------Build the matrices-----
    
     constexpr int DIM=3; 
     global_ordinal_type prolongation_offset = teuchos_comm->getRank() ? 0 : DIM + 1;
     auto S = Teuchos::rcp( new SplineProlongationOperator(prolongation_offset,_source_map) );   
-
-    // Build distributed search tree over the source points.
-    ArborX::DistributedSearchTree<DeviceType> search_tree( _comm,
-                                                           source_points );
-    DTK_CHECK( !search_tree.empty() );
+    // Get the operator map.
+    auto prolongated_map = S->getRangeMap();
 
     // For each source point, query the n_neighbors points closest to the
     // source.
@@ -95,15 +96,15 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
      // Create the P matrix.
     int offset = DIM + 1;
     auto P_vec =
-        Teuchos::rcp(new VectorType(_source_map, offset ));
+        Teuchos::rcp(new VectorType(prolongated_map, offset ));
     for ( unsigned i = 0; i < _n_source_points; ++i )
     {
-        const auto global_id = _source_map->getGlobalElement(i);
+        const auto global_id = prolongated_map->getGlobalElement(i);
         P_vec->replaceGlobalValue(global_id, 0, 1.0 );
         for ( int d = 0; d < DIM; ++d )
             P_vec->replaceGlobalValue(global_id, d+1, source_points(i,d) );
     }
-    auto d_P =Teuchos::rcp( new PolynomialMatrix(P_vec,_source_map,_source_map) );
+    auto d_P =Teuchos::rcp( new PolynomialMatrix(P_vec,prolongated_map,prolongated_map) );
 
     // Create the M matrix
 
@@ -125,7 +126,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
             source_points, source_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 
     // build matrix
-    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(_source_map, knn));
+    _crs_matrix = Teuchos::rcp(new Tpetra::CrsMatrix<>(prolongated_map, knn));
 
     std::cout << "before matrix" << std::endl;
 
@@ -141,7 +142,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
      for (local_ordinal_type i=0; i< n_local_target_points; ++i)
              for ( int j = _offset( i ); j < _offset( i + 1 ); ++j )
                 {
-			        const auto global_id = _source_map->getGlobalElement(i);
+			        const auto global_id = prolongated_map->getGlobalElement(i);
                 _crs_matrix->insertGlobalValues(global_id, 
 				                Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)),
 						Teuchos::tuple<scalar_type>(phi_M(j)));
