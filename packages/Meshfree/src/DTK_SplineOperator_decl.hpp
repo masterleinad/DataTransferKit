@@ -61,6 +61,11 @@ class SplineOperator : public PointCloudOperator<DeviceType>
     Kokkos::View<int *, DeviceType> _offset;
     Kokkos::View<int *, DeviceType> _ranks;
     Kokkos::View<int *, DeviceType> _indices;
+
+    Kokkos::View<int *, DeviceType> target_offset;
+    Kokkos::View<int *, DeviceType> target_ranks;
+    Kokkos::View<int *, DeviceType> target_indices;
+
     Kokkos::View<double *, DeviceType> _coeffs;
     Teuchos::RCP<Tpetra::CrsMatrix<>> _crs_matrix;
     Teuchos::RCP<Tpetra::Map<>> _destination_map;

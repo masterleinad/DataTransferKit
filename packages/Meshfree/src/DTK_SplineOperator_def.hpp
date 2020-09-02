@@ -101,11 +101,9 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     int offset = DIM + 1;
     auto P_vec =
         Teuchos::rcp(new VectorType(_source_map, offset ));
-    int di = 0;
     for ( unsigned i = 0; i < _n_source_points; ++i )
     {
         P_vec->replaceGlobalValue( cumulative_points_per_process[teuchos_comm->getRank()]+i, 0, 1.0 );
-        di = DIM*i;
         for ( int d = 0; d < DIM; ++d )
         {
             P_vec->replaceGlobalValue(
@@ -135,7 +133,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // build matrix
     int n_global_target_points;
-    int n_local_target_points = _offset.extent( 0 ) - 1;
+    int n_local_target_points = target_points.extent(0);
     MPI_Allreduce(&n_local_target_points, &n_global_target_points, 1, MPI_INT, MPI_SUM, comm);
     constexpr global_ordinal_type indexBase = 0;
     _destination_map = Teuchos::rcp (new Tpetra::Map<> (n_global_target_points, n_local_target_points, indexBase, teuchos_comm));
@@ -162,9 +160,51 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     std::cout << "fill comp;lete finished" << std::endl;
 
+     // For each source point, query the n_neighbors points closest to the
+    // source.
+    auto target_queries =
+        Details::SplineOperatorImpl<DeviceType>::makeKNNQueries(
+            target_points, PolynomialBasis::size );
+
+    // Perform the actual search.
+    search_tree.query( target_queries, target_indices, target_offset, target_ranks );
+
+    Kokkos::View<int *, DeviceType> target_ranks;
+
+    // Retrieve the coordinates of all source points that met the predicates.
+    // NOTE: This is the last collective.
+    auto needed_target_points = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
+        _comm, target_ranks, target_indices, source_points );
+
+    auto target_radius =
+        Details::SplineOperatorImpl<DeviceType>::computeRadius(
+            needed_target_points, source_points, target_offset );
+
      auto phi_N =
         Details::SplineOperatorImpl<DeviceType>::computeWeights(
-            source_points, target_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
+            source_points, needed_target_points, target_radius, target_offset, CompactlySupportedRadialBasisFunction() );
+
+
+   //....
+   
+      // Create the Q matrix.
+     {
+    constexpr int DIM=3;
+    int offset = DIM + 1;
+    auto Q_vec =
+        Teuchos::rcp(new VectorType(_destination_map, offset ));
+    for ( unsigned i = 0; i < n_local_target_points; ++i )
+    {
+	const auto global_id = _destination_map->getGlobalElement(i);
+        Q_vec->replaceGlobalValue( global_id, 0, 1.0 );
+        for ( int d = 0; d < DIM; ++d )
+        {
+            Q_vec->replaceGlobalValue(
+                global_id, d+1, target_points(i,d) );
+        }
+    }
+    auto d_Q =Teuchos::rcp( new PolynomialMatrix(Q_vec,_destination_map,_destination_map) );
+     }
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,
