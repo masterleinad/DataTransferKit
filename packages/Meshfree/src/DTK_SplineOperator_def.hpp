@@ -82,7 +82,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // Retrieve the coordinates of all source points that met the predicates.
     // NOTE: This is the last collective.
-    auto needed_source_points = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
+    auto needed_source_points_M = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
         _comm, _ranks, _indices, source_points );
 
      // Create the P matrix.
@@ -92,12 +92,10 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Teuchos::rcp(new VectorType(_source_map, offset ));
     for ( unsigned i = 0; i < _n_source_points; ++i )
     {
-        P_vec->replaceGlobalValue( cumulative_points_per_process[teuchos_comm->getRank()]+i, 0, 1.0 );
+        const auto global_id = _source_map->getGlobalElement(i);
+        P_vec->replaceGlobalValue(global_id, 0, 1.0 );
         for ( int d = 0; d < DIM; ++d )
-        {
-            P_vec->replaceGlobalValue(
-                cumulative_points_per_process[teuchos_comm->getRank()]+i, d+1, source_points(i,d) );
-        }
+            P_vec->replaceGlobalValue(global_id, d+1, source_points(i,d) );
     }
     auto d_P =Teuchos::rcp( new PolynomialMatrix(P_vec,_source_map,_source_map) );
 
@@ -111,7 +109,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // transformation of the coordinates.
     auto radius =
         Details::SplineOperatorImpl<DeviceType>::computeRadius(
-            source_points, source_points, _offset );
+            needed_source_points_M, source_points, _offset );
 
     std::cout << "before weights" << std::endl;
 
@@ -125,21 +123,28 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     std::cout << "before matrix" << std::endl;
 
-    //lower right block
-    for (local_ordinal_type i=0; i<_n_source_points; ++i)
-    {
-	    for (local_ordinal_type j=0; j<target_points.extent(0); ++j)
-              _crs_matrix->insertGlobalValues(i, Teuchos::tuple<global_ordinal_type>(j),
-		                                  Teuchos::tuple<scalar_type>(phi_M(i,j)));
-    }
+     int local_cumulative_points = 0;
+     MPI_Scan(&_n_source_points, &local_cumulative_points, 1, MPI_INT, MPI_SUM, comm);
 
-    std::cout << "fill complete" << std::endl;
+     int n_processes = 0;
+     MPI_Comm_size(MPI_COMM_WORLD, &n_processes);
 
-    //const global_ordinal_type gblRow = _destination_map->getGlobalElement (lclRow);
+     cumulative_points_per_process.resize(n_processes+1);
+     MPI_Allgather(&local_cumulative_points, 1, MPI_INT, &(cumulative_points_per_process[1]), 1, MPI_INT, comm);
+
+     for (local_ordinal_type i=0; i< n_local_target_points; ++i)
+             for ( int j = _offset( i ); j < _offset( i + 1 ); ++j )
+                {
+			        const auto global_id = _source_map->getGlobalElement(i);
+                _crs_matrix->insertGlobalValues(global_id, 
+				                Teuchos::tuple<global_ordinal_type>(cumulative_points_per_process[_ranks(j)]+_indices(j)),
+						Teuchos::tuple<scalar_type>(phi_M(j)));
+                }
+
     // Tell the sparse matrix that we are done adding entries to it.
     _crs_matrix->fillComplete ();
 
-    std::cout << "fill comp;lete finished" << std::endl;
+    // N matrix
 
      // For each source point, query the n_neighbors points closest to the
     // source.
@@ -154,16 +159,16 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // Retrieve the coordinates of all source points that met the predicates.
     // NOTE: This is the last collective.
-    auto needed_target_points = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
+    auto needed_source_points_Q = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
         _comm, target_ranks, target_indices, source_points );
 
     auto target_radius =
         Details::SplineOperatorImpl<DeviceType>::computeRadius(
-            needed_target_points, source_points, target_offset );
+            needed_source_points_Q, target_points, target_offset );
 
      auto phi_N =
         Details::SplineOperatorImpl<DeviceType>::computeWeights(
-            source_points, needed_target_points, target_radius, target_offset, CompactlySupportedRadialBasisFunction() );
+            source_points, needed_source_points_Q, target_radius, target_offset, CompactlySupportedRadialBasisFunction() );
 
 
    //....
@@ -174,7 +179,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     int offset = DIM + 1;
     auto Q_vec =
         Teuchos::rcp(new VectorType(_destination_map, offset ));
-    for ( unsigned i = 0; i < n_local_target_points; ++i )
+    for ( int i = 0; i < n_local_target_points; ++i )
     {
 	const auto global_id = _destination_map->getGlobalElement(i);
         Q_vec->replaceGlobalValue( global_id, 0, 1.0 );
@@ -207,7 +212,10 @@ void SplineOperator<
 
     // copy source_values to source
     for (unsigned int i=0; i<_ranks.extent(0); ++i)
-      _source->replaceGlobalValue(4+cumulative_points_per_process[_ranks(i)]+_indices(i),0,source_values(i));
+    {
+       const auto global_id = _source_map->getGlobalElement(i);
+      _source->replaceGlobalValue(global_id,0,source_values(i));
+    }
 
     auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, _source, _destination));
     problem->setProblem();

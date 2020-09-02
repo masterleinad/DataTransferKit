@@ -71,13 +71,13 @@ struct SplineOperatorImpl
     }
 
     static Kokkos::View<double *, DeviceType>
-    computeRadius( Kokkos::View<Coordinate const **, DeviceType> source_points,
+    computeRadius( Kokkos::View<Coordinate const **, DeviceType> needed_source_points,
 		   Kokkos::View<Coordinate const **, DeviceType> target_points, 
                    Kokkos::View<int const *, DeviceType> offset )
     {
         unsigned int const n_target_points = offset.extent( 0 ) - 1;
         Kokkos::View<double *, DeviceType> radius( "radius",
-                                                   source_points.extent( 0 ) );
+                                                   needed_source_points.extent( 0 ) );
 
         Kokkos::parallel_for(
             DTK_MARK_REGION( "compute_radius" ),
@@ -93,9 +93,9 @@ struct SplineOperatorImpl
                 for ( int j = offset( i ); j < offset( i + 1 ); ++j )
                 {
                     double new_distance = ArborX::Details::distance(
-                        ArborX::Point{{source_points( j, 0 ),
-                                       source_points( j, 1 ),
-                                       source_points( j, 2 )}},
+                        ArborX::Point{{needed_source_points( j, 0 ),
+                                       needed_source_points( j, 1 ),
+                                       needed_source_points( j, 2 )}},
                         ArborX::Point{{target_points( i, 0 ),
 			               target_points( i, 1 ),
 				       target_points( i, 2 )}});
@@ -117,22 +117,21 @@ struct SplineOperatorImpl
     // template deduction. For some unknown reason, explicitly choosing the
     // value of the template parameter does not work.
     template <typename RBF>
-    static Kokkos::View<double **, DeviceType>
-    computeWeights( Kokkos::View<Coordinate const **, DeviceType> source_points,
+    static Kokkos::View<double *, DeviceType>
+    computeWeights( Kokkos::View<Coordinate const **, DeviceType> needed_source_points,
 		    Kokkos::View<Coordinate const **, DeviceType> target_points,
                     Kokkos::View<double const *, DeviceType> radius,
 		    Kokkos::View<int const *, DeviceType> offset,
                     RBF const & )
     {
         auto const n_target_points = target_points.extent( 0 );
-        auto const n_source_points = source_points.extent( 0 );
 
         DTK_REQUIRE( target_points.extent_int( 1 ) == 3 );
 
         // The argument of rbf is a distance because we have changed the
         // coordinate system such the target point is the origin of the new
         // coordinate system.
-        Kokkos::View<double **, DeviceType> phi( "weights", n_source_points, target_points.extent(0));
+        Kokkos::View<double *, DeviceType> phi( "weights", needed_source_points.extent(0));
         Kokkos::parallel_for(
             DTK_MARK_REGION( "compute_weights" ),
             Kokkos::RangePolicy<ExecutionSpace>( 0, n_target_points ),
@@ -140,9 +139,9 @@ struct SplineOperatorImpl
 	     for ( int j = offset( i ); j < offset( i + 1 ); ++j )
                 {
                 RadialBasisFunction<RBF> rbf( radius( j ) );
-                phi( i,j ) = rbf( ArborX::Details::distance(
-                    ArborX::Point{{source_points( i, 0 ), source_points( i, 1 ),
-                                   source_points( i, 2 )}},
+                phi( j ) = rbf( ArborX::Details::distance(
+                    ArborX::Point{{needed_source_points( i, 0 ), needed_source_points( i, 1 ),
+                                   needed_source_points( i, 2 )}},
                     ArborX::Point{{target_points( j, 0), target_points(j,1), 
 		                   target_points( j, 2)}} ) );
 		}} );
@@ -169,131 +168,6 @@ struct SplineOperatorImpl
                     p( i * size_polynomial_basis + j ) = tmp[j];
             } );
         return p;
-    }
-
-    static Kokkos::View<double *, DeviceType>
-    computeMoments( Kokkos::View<int const *, DeviceType> offset,
-                    Kokkos::View<double const *, DeviceType> p,
-                    Kokkos::View<double const *, DeviceType> phi )
-    {
-        auto const n_target_points = offset.extent_int( 0 ) - 1;
-        auto const n_source_points = phi.extent_int( 0 );
-        DTK_REQUIRE( n_source_points == ArborX::lastElement( offset ) );
-        if ( n_source_points == 0 )
-            return Kokkos::View<double *, DeviceType>( "moments", 0 );
-        auto const size_polynomial_basis = p.extent_int( 0 ) / n_source_points;
-        auto const size_polynomial_basis_squared =
-            size_polynomial_basis * size_polynomial_basis;
-        Kokkos::View<double *, DeviceType> a(
-            "moments", n_target_points * size_polynomial_basis_squared );
-        Kokkos::parallel_for(
-            DTK_MARK_REGION( "compute_moments" ),
-            Kokkos::RangePolicy<ExecutionSpace>( 0, n_target_points ),
-            KOKKOS_LAMBDA( int i ) {
-                auto p_i = Kokkos::subview(
-                    p, Kokkos::make_pair( offset( i ) * size_polynomial_basis,
-                                          offset( i + 1 ) *
-                                              size_polynomial_basis ) );
-                auto phi_i = Kokkos::subview(
-                    phi, Kokkos::make_pair( offset( i ), offset( i + 1 ) ) );
-                auto a_i = Kokkos::subview(
-                    a, Kokkos::make_pair( i * size_polynomial_basis_squared,
-                                          ( i + 1 ) *
-                                              size_polynomial_basis_squared ) );
-                for ( int j = 0; j < size_polynomial_basis; ++j )
-                    for ( int k = 0; k < size_polynomial_basis; ++k )
-                    {
-                        double tmp = 0.;
-                        for ( int l = 0; l < offset( i + 1 ) - offset( i );
-                              ++l )
-                            // Compute value (j,k)
-                            tmp += p_i( l * size_polynomial_basis + j ) *
-                                   phi_i( l ) *
-                                   p_i( l * size_polynomial_basis + k );
-                        a_i( j * size_polynomial_basis + k ) = tmp;
-                    }
-            } );
-        Kokkos::fence();
-
-        return a;
-    }
-
-    // Matrix pseudo-inversion using SVD
-    // Takes in a 1D array of matrices of size NxN, and returns a 1D array of
-    // matrices of the same size containing corresponding pseudo-inverses
-    static std::tuple<Kokkos::View<double *, DeviceType>, size_t>
-    invertMoments( Kokkos::View<double const *, DeviceType> a,
-                   const int size_polynomial_basis )
-    {
-        Kokkos::View<double *, DeviceType> inv_a( "inv_a", a.extent( 0 ) );
-
-        auto num_matrices =
-            a.extent( 0 ) / ( size_polynomial_basis * size_polynomial_basis );
-
-        // We request auxiliary space for matrices E, U, and V (thus, 3) that
-        // we need inside SVD. Single level parallelism does not provide access
-        // to scratch space (or, at the least, I don't know how to access it).
-        // So we preallocate it here, and pass to the functor. We use 2D array
-        // as we would like to use 2D matrices inside SVD, and there is no way
-        // to reshape.
-        Kokkos::View<double **, DeviceType> aux( "aux", size_polynomial_basis,
-                                                 3 * num_matrices *
-                                                     size_polynomial_basis );
-
-        SVDFunctor<DeviceType> svdFunctor( size_polynomial_basis, a, inv_a,
-                                           aux );
-        size_t num_underdetermined = 0;
-        Kokkos::parallel_reduce(
-            DTK_MARK_REGION( "compute_svd_inverse" ),
-            Kokkos::RangePolicy<ExecutionSpace>( 0, num_matrices ), svdFunctor,
-            num_underdetermined );
-
-        return std::make_tuple( inv_a, num_underdetermined );
-    }
-
-    static Kokkos::View<double *, DeviceType> computePolynomialCoefficients(
-        Kokkos::View<int const *, DeviceType> offset,
-        Kokkos::View<double const *, DeviceType> inv_a,
-        Kokkos::View<double const *, DeviceType> p,
-        Kokkos::View<double const *, DeviceType> phi,
-        const int size_polynomial_basis )
-    {
-        auto const size_polynomial_basis_squared =
-            size_polynomial_basis * size_polynomial_basis;
-
-        auto num_matrices = inv_a.extent( 0 ) / size_polynomial_basis_squared;
-
-        Kokkos::View<double *, DeviceType> coeffs( "polynomial_coeffs",
-                                                   phi.extent( 0 ) );
-
-        Kokkos::parallel_for(
-            DTK_MARK_REGION( "compute_polynomial_coeffs" ),
-            Kokkos::RangePolicy<ExecutionSpace>( 0, num_matrices ),
-            KOKKOS_LAMBDA( const int i ) {
-                auto p_i = Kokkos::subview(
-                    p, Kokkos::make_pair( offset( i ) * size_polynomial_basis,
-                                          offset( i + 1 ) *
-                                              size_polynomial_basis ) );
-                auto phi_i = Kokkos::subview(
-                    phi, Kokkos::make_pair( offset( i ), offset( i + 1 ) ) );
-                auto inv_a_i = Kokkos::subview(
-                    inv_a, Kokkos::make_pair(
-                               i * size_polynomial_basis_squared,
-                               ( i + 1 ) * size_polynomial_basis_squared ) );
-                auto coeffs_i = Kokkos::subview(
-                    coeffs, Kokkos::make_pair( offset( i ), offset( i + 1 ) ) );
-
-                // coeffs = [1 0 ... 0] * a_inv * p^T * phi
-                for ( int k = 0; k < offset( i + 1 ) - offset( i ); k++ )
-                {
-                    coeffs_i( k ) = 0.;
-                    for ( int j = 0; j < size_polynomial_basis; j++ )
-                        coeffs_i( k ) +=
-                            inv_a_i( 0 * size_polynomial_basis + j ) *
-                            p_i( k * size_polynomial_basis + j ) * phi_i( k );
-                }
-            } );
-        return coeffs;
     }
 };
 
