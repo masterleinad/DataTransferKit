@@ -143,7 +143,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // Build phi (weight matrix)
     auto phi_M =
         Details::SplineOperatorImpl<DeviceType>::computeWeights(
-            source_points, source_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
+            needed_source_points_M, source_points, radius, _offset, CompactlySupportedRadialBasisFunction() );
 
     // build matrix
     auto crs_M = Teuchos::rcp(new Tpetra::CrsMatrix<>(prolongated_map, knn));
