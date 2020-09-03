@@ -96,6 +96,18 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // Perform the actual search.
     search_tree.query( source_queries, _indices, _offset, _ranks );
 
+    std::cout << "indices: " << _indices.extent(0) << std::endl;
+/*    for (unsigned int i=0; i<_indices.extent(0); ++i)
+	    std::cout << "i: " << _indices(i) << std::endl;*/
+
+    std::cout << "offset: " << _offset.extent(0) << std::endl;
+/*    for (unsigned int i=0; i<_offset.extent(0); ++i)
+            std::cout << "i: " << _offset(i) << std::endl;*/
+
+    std::cout << "ranks: " << _ranks.extent(0) << std::endl;
+/*    for (unsigned int i=0; i<_ranks.extent(0); ++i)
+            std::cout << "i: " << _ranks(i) << std::endl;*/
+
     // Retrieve the coordinates of all source points that met the predicates.
     // NOTE: This is the last collective.
     auto needed_source_points_M = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
