@@ -28,6 +28,8 @@
 #include <Thyra_DefaultAddedLinearOp.hpp>
 #include <Thyra_LinearOpWithSolveFactoryHelpers.hpp>
 
+#include <Teuchos_XMLParameterListCoreHelpers.hpp>
+
 #include <Stratimikos_DefaultLinearSolverBuilder.hpp>
 
 namespace DataTransferKit
@@ -319,7 +321,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // If we didnt get stratimikos parameters from the input list, create some
     // here.
-    /*if ( Teuchos::is_null(d_stratimikos_list) )
+    Teuchos::RCP<Teuchos::ParameterList> d_stratimikos_list;
+    if ( Teuchos::is_null(d_stratimikos_list) )
     {
         d_stratimikos_list = Teuchos::parameterList("Stratimikos");
         Teuchos::updateParametersFromXmlString(
@@ -334,7 +337,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // Create the inverse of the composite operator C.
     Stratimikos::DefaultLinearSolverBuilder builder;
-    //builder.setParameterList( d_stratimikos_list );
+     std::cout << "12a" << std::endl;
+    builder.setParameterList( d_stratimikos_list );
     Teuchos::RCP<Thyra::LinearOpWithSolveFactoryBase<scalar_type> > factory =
         Thyra::createLinearSolveStrategy( builder );
     Teuchos::RCP<const Thyra::LinearOpBase<scalar_type> > thyra_C_inv =
