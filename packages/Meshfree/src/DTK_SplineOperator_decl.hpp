@@ -42,12 +42,16 @@ template <typename DeviceType,
           typename PolynomialBasis = MultivariatePolynomialBasis<Linear, 3>>
 class SplineOperator : public PointCloudOperator<DeviceType>
 {
-    using ExecutionSpace = typename DeviceType::execution_space;
-     using VectorType = Tpetra::MultiVector<>;
+    using VectorType = Tpetra::MultiVector<>;
     using OperatorType = Tpetra::Operator<>;
     using ScalarType = double;
 
   public:
+    using device_type = DeviceType;
+    using ExecutionSpace = typename DeviceType::execution_space;
+    using polynomial_basis = PolynomialBasis;
+    using radial_basis_function = CompactlySupportedRadialBasisFunction;
+
     SplineOperator(
         MPI_Comm comm,
         Kokkos::View<Coordinate const **, DeviceType> source_points,
@@ -76,23 +80,23 @@ class SplineOperator : public PointCloudOperator<DeviceType>
     Teuchos::RCP<Tpetra::MultiVector<>> _source;
     Teuchos::RCP<Tpetra::MultiVector<>> _destination;
 
-       // Prolongation operator.
-    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> S;
+    // Prolongation operator.
+    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> S;
 
     // Coefficient matrix polynomial component.
-    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> P;
+    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> P;
 
     // Coefficient matrix basis component.
-    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> M;
+    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> M;
 
     // Evaluation matrix polynomial component.
-    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> Q;
+    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> Q;
 
     // Evaluation matrix basis component.
-    Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> N;
+    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> N;
 
     // Coupling matrix
-    Teuchos::RCP<const Thyra::LinearOpBase<double> > d_coupling_matrix;
+    Teuchos::RCP<const Thyra::LinearOpBase<double>> d_coupling_matrix;
 };
 
 } // end namespace DataTransferKit
