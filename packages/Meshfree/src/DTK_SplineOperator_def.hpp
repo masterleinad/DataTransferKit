@@ -105,7 +105,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     int offset = DIM + 1;
     auto P_vec =
         Teuchos::rcp(new VectorType(prolongated_map, offset ));
-    for ( unsigned i = 0; i < _n_source_points; ++i )
+    for ( LocalOrdinal i = 0; i < _n_source_points; ++i )
     {
         const auto global_id = prolongated_map->getGlobalElement(i);
         P_vec->replaceGlobalValue(global_id, 0, 1.0 );
@@ -335,7 +335,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Thyra::add<scalar_type>( thyra_Q, thyra_N );
 
     // Create the coupling matrix A = (B * C^-1 * S).
-    auto d_coupling_matrix =
+    d_coupling_matrix =
         Thyra::multiply<scalar_type>( thyra_B, thyra_C_inv, thyra_S );
     DTK_ENSURE( Teuchos::nonnull(d_coupling_matrix) );
 }
@@ -364,7 +364,7 @@ void SplineOperator<
       _source->replaceGlobalValue(global_id,0,source_values(i));
     }
 
-    auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, _source, _destination));
+    /*auto problem = Teuchos::rcp (new Belos::LinearProblem<ScalarType,VectorType,OperatorType>(_crs_matrix, _source, _destination));
     problem->setProblem();
 
     Teuchos::RCP<Teuchos::ParameterList> params;
@@ -373,11 +373,18 @@ void SplineOperator<
     auto ret = solver.solve();
     (void) ret;
     DTK_REQUIRE(ret == Belos::Converged);
-    auto solution = problem->getLHS();
+    auto solution = problem->getLHS();*/
+
+    auto thyra_X =
+        Thyra::createMultiVector<ScalarType>( _source );
+    auto thyra_Y =
+        Thyra::createMultiVector<ScalarType>( _destination );
+    d_coupling_matrix->apply(
+        Thyra::NOTRANS, *thyra_X, thyra_Y.ptr(), 1, 0 );
 
     // copy solution to target_values
     for(unsigned int i=0; i<target_values.size(); ++i)
-	    target_values(i) = solution->getLocalViewHost()(i,0);    
+	    target_values(i) = _destination->getLocalViewHost()(i,0);    
 }
 
 } // end namespace DataTransferKit

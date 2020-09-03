@@ -18,6 +18,8 @@
 
 #include <Tpetra_CrsMatrix.hpp>
 
+#include <Thyra_LinearOpBase.hpp>
+
 #include <mpi.h>
 
 namespace DataTransferKit
@@ -57,7 +59,7 @@ class SplineOperator : public PointCloudOperator<DeviceType>
 
   private:
     MPI_Comm _comm;
-    unsigned int const _n_source_points;
+    LocalOrdinal const _n_source_points;
     Kokkos::View<int *, DeviceType> _offset;
     Kokkos::View<int *, DeviceType> _ranks;
     Kokkos::View<int *, DeviceType> _indices;
@@ -88,6 +90,9 @@ class SplineOperator : public PointCloudOperator<DeviceType>
 
     // Evaluation matrix basis component.
     Teuchos::RCP<const Tpetra::Operator<double,int,GlobalOrdinal>> N;
+
+    // Coupling matrix
+    Teuchos::RCP<const Thyra::LinearOpBase<double> > d_coupling_matrix;
 };
 
 } // end namespace DataTransferKit
