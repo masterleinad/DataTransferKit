@@ -188,8 +188,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // Perform the actual search.
     search_tree.query( target_queries, target_indices, target_offset, target_ranks );
 
-    Kokkos::View<int *, DeviceType> target_ranks;
-
     // Retrieve the coordinates of all source points that met the predicates.
     // NOTE: This is the last collective.
     auto needed_source_points_Q = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
