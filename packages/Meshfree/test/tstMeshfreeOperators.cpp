@@ -118,8 +118,8 @@ struct Helper
     }
 };
 
-TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperator,
-                                   same_npoints_and_basis, Operator )
+TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, same_npoints_and_basis,
+                                   Operator )
 {
     // Test the situation when the number of found source points is the same as
     // the basis size. This greatly simplifies the situation as the equation
@@ -208,7 +208,7 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperator,
     TEST_COMPARE_FLOATING_ARRAYS( target_values_host, target_values_ref, 1e-7 );
 }
 
-TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperator, grid, Operator )
+TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, grid, Operator )
 {
     using namespace DataTransferKit;
 
@@ -278,7 +278,7 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperator, grid, Operator )
                                   1e-14 );
 }
 
-TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperator, line, Operator )
+TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, line, Operator )
 {
     using namespace DataTransferKit;
 
@@ -348,8 +348,8 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperator, line, Operator )
                                   1e-14 );
 }
 
-TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperator,
-                                   single_point_in_radius, Operator )
+TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, single_point_in_radius,
+                                   Operator )
 {
     using namespace DataTransferKit;
 
@@ -444,34 +444,34 @@ using Quadratic3 =
     using MLS_Wendland0_Quadratic3_##NODE =                                    \
         DataTransferKit::MovingLeastSquaresOperator<                           \
             typename NODE::device_type, Wendland0, Quadratic3>;                \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator,          \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           same_npoints_and_basis,              \
                                           MLS_Wendland0_Constant3_##NODE )     \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator,          \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           same_npoints_and_basis,              \
                                           MLS_Wendland0_Linear3_##NODE )       \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator,          \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           same_npoints_and_basis,              \
                                           MLS_Wendland0_Quadratic3_##NODE )    \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator, line,    \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, line,              \
                                           MLS_Wendland0_Constant3_##NODE )     \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator, line,    \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, line,              \
                                           MLS_Wendland0_Linear3_##NODE )       \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator, line,    \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, line,              \
                                           MLS_Wendland0_Quadratic3_##NODE )    \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator, grid,    \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, grid,              \
                                           MLS_Wendland0_Constant3_##NODE )     \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator, grid,    \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, grid,              \
                                           MLS_Wendland0_Linear3_##NODE )       \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator, grid,    \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, grid,              \
                                           MLS_Wendland0_Quadratic3_##NODE )    \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator,          \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           single_point_in_radius,              \
                                           MLS_Wendland0_Constant3_##NODE )     \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator,          \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           single_point_in_radius,              \
                                           MLS_Wendland0_Linear3_##NODE )       \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MovingLeastSquaresOperator,          \
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           single_point_in_radius,              \
                                           MLS_Wendland0_Quadratic3_##NODE )
 
