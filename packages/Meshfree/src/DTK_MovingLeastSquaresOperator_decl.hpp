@@ -38,9 +38,12 @@ template <typename DeviceType,
           typename PolynomialBasis = MultivariatePolynomialBasis<Linear, 3>>
 class MovingLeastSquaresOperator : public PointCloudOperator<DeviceType>
 {
-    using ExecutionSpace = typename DeviceType::execution_space;
-
   public:
+    using device_type = DeviceType;
+    using ExecutionSpace = typename DeviceType::execution_space;
+    using polynomial_basis = PolynomialBasis;
+    using radial_basis_function = CompactlySupportedRadialBasisFunction;
+
     MovingLeastSquaresOperator(
         MPI_Comm comm,
         Kokkos::View<Coordinate const **, DeviceType> source_points,
