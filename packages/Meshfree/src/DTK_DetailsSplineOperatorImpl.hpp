@@ -70,14 +70,14 @@ struct SplineOperatorImpl
         return target_values;
     }
 
-    static Kokkos::View<double *, DeviceType>
-    computeRadius( Kokkos::View<Coordinate const **, DeviceType> needed_source_points,
-		   Kokkos::View<Coordinate const **, DeviceType> target_points, 
-                   Kokkos::View<int const *, DeviceType> offset )
+    static Kokkos::View<double *, DeviceType> computeRadius(
+        Kokkos::View<Coordinate const **, DeviceType> needed_source_points,
+        Kokkos::View<Coordinate const **, DeviceType> target_points,
+        Kokkos::View<int const *, DeviceType> offset )
     {
         unsigned int const n_target_points = offset.extent( 0 ) - 1;
-        Kokkos::View<double *, DeviceType> radius( "radius",
-                                                   needed_source_points.extent( 0 ) );
+        Kokkos::View<double *, DeviceType> radius(
+            "radius", needed_source_points.extent( 0 ) );
 
         Kokkos::parallel_for(
             DTK_MARK_REGION( "compute_radius" ),
@@ -97,8 +97,8 @@ struct SplineOperatorImpl
                                        needed_source_points( j, 1 ),
                                        needed_source_points( j, 2 )}},
                         ArborX::Point{{target_points( i, 0 ),
-			               target_points( i, 1 ),
-				       target_points( i, 2 )}});
+                                       target_points( i, 1 ),
+                                       target_points( i, 2 )}} );
 
                     if ( new_distance > distance )
                         distance = new_distance;
@@ -117,12 +117,11 @@ struct SplineOperatorImpl
     // template deduction. For some unknown reason, explicitly choosing the
     // value of the template parameter does not work.
     template <typename RBF>
-    static Kokkos::View<double *, DeviceType>
-    computeWeights( Kokkos::View<Coordinate const **, DeviceType> needed_source_points,
-		    Kokkos::View<Coordinate const **, DeviceType> target_points,
-                    Kokkos::View<double const *, DeviceType> radius,
-		    Kokkos::View<int const *, DeviceType> offset,
-                    RBF const & )
+    static Kokkos::View<double *, DeviceType> computeWeights(
+        Kokkos::View<Coordinate const **, DeviceType> needed_source_points,
+        Kokkos::View<Coordinate const **, DeviceType> target_points,
+        Kokkos::View<double const *, DeviceType> radius,
+        Kokkos::View<int const *, DeviceType> offset, RBF const & )
     {
         auto const n_target_points = target_points.extent( 0 );
 
@@ -131,23 +130,28 @@ struct SplineOperatorImpl
         // The argument of rbf is a distance because we have changed the
         // coordinate system such the target point is the origin of the new
         // coordinate system.
-        Kokkos::View<double *, DeviceType> phi( "weights", needed_source_points.extent(0));
+        Kokkos::View<double *, DeviceType> phi(
+            "weights", needed_source_points.extent( 0 ) );
         Kokkos::parallel_for(
             DTK_MARK_REGION( "compute_weights" ),
             Kokkos::RangePolicy<ExecutionSpace>( 0, n_target_points ),
             KOKKOS_LAMBDA( int i ) {
-	     for ( int j = offset( i ); j < offset( i + 1 ); ++j )
+                for ( int j = offset( i ); j < offset( i + 1 ); ++j )
                 {
-                RadialBasisFunction<RBF> rbf( radius( j ) );
-		std::cout << "acessing " << i << " " << j << " out of " << needed_source_points.extent(0) << std::endl;
-		if (j>=needed_source_points.extent(0))
-         		Kokkos::abort("out-of-bounds!");
-                phi( j ) = rbf( ArborX::Details::distance(
-                    ArborX::Point{{needed_source_points( i, 0 ), needed_source_points( i, 1 ),
-                                   needed_source_points( i, 2 )}},
-                    ArborX::Point{{target_points( j, 0), target_points(j,1), 
-		                   target_points( j, 2)}} ) );
-		}} );
+                    RadialBasisFunction<RBF> rbf( radius( j ) );
+                    std::cout << "acessing " << i << " " << j << " out of "
+                              << needed_source_points.extent( 0 ) << std::endl;
+                    if ( j >= needed_source_points.extent( 0 ) )
+                        Kokkos::abort( "out-of-bounds!" );
+                    phi( j ) = rbf( ArborX::Details::distance(
+                        ArborX::Point{{needed_source_points( i, 0 ),
+                                       needed_source_points( i, 1 ),
+                                       needed_source_points( i, 2 )}},
+                        ArborX::Point{{target_points( j, 0 ),
+                                       target_points( j, 1 ),
+                                       target_points( j, 2 )}} ) );
+                }
+            } );
         Kokkos::fence();
         return phi;
     }

@@ -114,8 +114,8 @@ void checkResults( std::vector<double> const &values,
     TEST_COMPARE_FLOATING_ARRAYS( values, references, relative_tolerance );
 }
 
-TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( SplineOperatorSimpleProblem,
-                                   corner_cases, DeviceType )
+TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( SplineOperatorSimpleProblem, corner_cases,
+                                   DeviceType )
 {
     // single point
     {
@@ -156,9 +156,8 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( SplineOperatorSimpleProblem,
 // Create the test group
 #define UNIT_TEST_GROUP( NODE )                                                \
     using DeviceType##NODE = typename NODE::device_type;                       \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT(                                      \
-        SplineOperatorSimpleProblem, corner_cases,                 \
-        DeviceType##NODE )
+    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( SplineOperatorSimpleProblem,         \
+                                          corner_cases, DeviceType##NODE )
 
 // Demangle the types
 DTK_ETI_MANGLING_TYPEDEFS()

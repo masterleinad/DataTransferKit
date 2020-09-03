@@ -29,9 +29,9 @@ namespace Details
  * @param x is zero, and -1 if @param x is less than zero.
  */
 template <typename T, typename = std::enable_if_t<std::is_arithmetic<T>::value>>
-KOKKOS_INLINE_FUNCTION int sgn(T x)
+KOKKOS_INLINE_FUNCTION int sgn( T x )
 {
-  return (x > 0) - (x < 0);
+    return ( x > 0 ) - ( x < 0 );
 }
 
 // The original version of this functor was taken from Trilinos mini-tensor
