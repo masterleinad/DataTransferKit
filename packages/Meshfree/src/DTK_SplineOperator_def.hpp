@@ -218,7 +218,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         needed_source_points_Q, target_points, target_offset );
 
     auto phi_N = Details::SplineOperatorImpl<DeviceType>::computeWeights(
-        source_points, needed_source_points_Q, target_radius, target_offset,
+        needed_source_points_Q, target_points, target_radius, target_offset,
         CompactlySupportedRadialBasisFunction() );
 
     //....
@@ -385,8 +385,9 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     }
     * /
 
-        // Create the inverse of the composite operator C.
-        Stratimikos::DefaultLinearSolverBuilder builder;
+    std::cout << "12" << std::endl;
+    // Create the inverse of the composite operator C.
+    Stratimikos::DefaultLinearSolverBuilder builder;
     std::cout << "12a" << std::endl;
     builder.setParameterList( d_stratimikos_list );
     Teuchos::RCP<Thyra::LinearOpWithSolveFactoryBase<scalar_type>> factory =
@@ -415,7 +416,7 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // Precondition: check that the source and the target are properly sized
     DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
-    DTK_REQUIRE( target_values.extent( 0 ) == _offset.extent( 0 ) - 1 );
+    DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
 
     // Retrieve values for all source points
     source_values = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
