@@ -62,8 +62,7 @@ namespace DataTransferKit
 template <typename Scalar, typename LocalOrdinal, typename GlobalOrdinal,
           typename Node>
 class SplineProlongationOperator
-    : public Tpetra::Operator<typename Scalar, typename LocalOrdinal,
-                              typename GlobalOrdinal, typename Node>
+    : public Tpetra::Operator<Scalar, LocalOrdinal, GlobalOrdinal, Node>
 {
     using Map = Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node>;
     using MultiVector =

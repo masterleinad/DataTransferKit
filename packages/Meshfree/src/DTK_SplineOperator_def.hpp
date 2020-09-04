@@ -41,14 +41,14 @@ Teuchos::RCP<
 SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                PolynomialBasis>::
     buildBasisOperator(
-        Map const &domain_map, Map const &range_map,
+        Teuchos::RCP<const Map> domain_map, Teuchos::RCP<const Map> range_map,
         Kokkos::View<Coordinate const **, DeviceType> source_points,
         Kokkos::View<Coordinate const **, DeviceType> target_points,
-        int const knn ) const
+        int const knn )
 {
-    auto teuchos_comm = domain_map.getComm();
+    auto teuchos_comm = domain_map->getComm();
     auto teuchos_mpi_comm =
-        Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int>>( origComm );
+        Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int>>( teuchos_comm );
     MPI_Comm comm = ( *teuchos_mpi_comm->getRawMpiComm() )();
 
     int const num_source_points = source_points.extent( 0 );
@@ -104,7 +104,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     for ( LO i = 0; i < num_points; ++i )
         for ( int j = offset( i ); j < offset( i + 1 ); ++j )
         {
-            const auto global_id = map->getGlobalElement( i );
+            const auto global_id = domain_map->getGlobalElement( i );
             crs_matrix->insertGlobalValues(
                 global_id,
                 Teuchos::tuple<GO>( cumulative_points_per_process[ranks( j )] +
@@ -126,8 +126,8 @@ Teuchos::RCP<
 SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                PolynomialBasis>::
     buildPolynomialOperator(
-        Map const &domain_map, Map const &range_map,
-        Kokkos::View<Coordinate const **, DeviceType> points ) const
+        Teuchos::RCP<const Map> domain_map, Teuchos::RCP<const Map> range_map,
+        Kokkos::View<Coordinate const **, DeviceType> points )
 {
     const int n = points.extent( 0 );
     const int spatial_dim = points.extent( 1 );
@@ -182,23 +182,23 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // Build distributed search tree over the source points.
     // NOTE: M is not the M from the paper, but an extended size block matrix
-    M = buildBasisOperator( *prolongation_map, *prolongation_map, source_points,
+    M = buildBasisOperator( prolongation_map, prolongation_map, source_points,
                             source_points, knn );
-    P = buildPolynomialOperator( *prolongation_map, *prolongation_map,
+    P = buildPolynomialOperator( prolongation_map, prolongation_map,
                                  source_points );
-    N = buildBasisOperator( *prolongation_map, *target_map, source_points,
+    N = buildBasisOperator( prolongation_map, target_map, source_points,
                             target_points, knn );
-    Q = buildPolynomialOperator( *prolongation_map, *target_map,
-                                 target_points );
+    Q = buildPolynomialOperator( prolongation_map, target_map, target_points );
 
     // Step 3: build Thyra operator: A = (Q + N)*[(P + M + P^T)^-1]*S
-    auto thyraWrapper = []( Teuchos::RCP<Operator> &op ) {
+    auto thyraWrapper = []( Teuchos::RCP<const Operator> &op ) {
         auto thyra_range_vector_space =
             Thyra::createVectorSpace<SC>( op->getRangeMap() );
         auto thyra_domain_vector_space =
             Thyra::createVectorSpace<SC>( op->getDomainMap() );
-        auto thyra_op = Teuchos::rcp( new Thyra::TpetraLinearOp<SC, LO, GO>() );
-        Teuchos::rcp_const_cast<Thyra::TpetraLinearOp<SC, LO, GO>>( thyra_op )
+        using ThyraOperator = Thyra::TpetraLinearOp<SC, LO, GO, NO>;
+        auto thyra_op = Teuchos::rcp( new ThyraOperator() );
+        Teuchos::rcp_const_cast<ThyraOperator>( thyra_op )
             ->constInitialize( thyra_range_vector_space,
                                thyra_domain_vector_space, op );
         return thyra_op;
@@ -294,8 +294,8 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     DTK_REQUIRE(ret == Belos::Converged); auto solution =
     problem->getLHS();*/
 
-    auto thyra_X = Thyra::createMultiVector<ScalarType>( source );
-    auto thyra_Y = Thyra::createMultiVector<ScalarType>( destination );
+    auto thyra_X = Thyra::createMultiVector<SC>( source );
+    auto thyra_Y = Thyra::createMultiVector<SC>( destination );
     _thyra_operator->apply( Thyra::NOTRANS, *thyra_X, thyra_Y.ptr(), 1, 0 );
 
     // copy solution to target_values

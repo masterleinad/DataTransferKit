@@ -43,7 +43,7 @@ template <typename DeviceType,
 class SplineOperator : public PointCloudOperator<DeviceType>
 {
     using LO = int;
-    using GO = long;
+    using GO = long long;
     // using NO = Kokkos::Compat::KokkosDeviceWrapperNode<DeviceType>;
     using NO = Kokkos::Compat::KokkosSerialWrapperNode;
     using SC = Coordinate;
@@ -75,32 +75,32 @@ class SplineOperator : public PointCloudOperator<DeviceType>
     Kokkos::View<int *, DeviceType> _indices;
 
     // Prolongation operator.
-    Teuchos::RCP<Operator> S;
+    Teuchos::RCP<const Operator> S;
 
     // Coefficient matrix polynomial component.
-    Teuchos::RCP<Operator> P;
+    Teuchos::RCP<const Operator> P;
 
     // Coefficient matrix basis component.
-    Teuchos::RCP<Operator> M;
+    Teuchos::RCP<const Operator> M;
 
     // Evaluation matrix polynomial component.
-    Teuchos::RCP<Operator> Q;
+    Teuchos::RCP<const Operator> Q;
 
     // Evaluation matrix basis component.
-    Teuchos::RCP<Operator> N;
+    Teuchos::RCP<const Operator> N;
 
     // Coupling matrix
     Teuchos::RCP<const Thyra::LinearOpBase<SC>> _thyra_operator;
 
     Teuchos::RCP<Operator> buildPolynomialOperator(
-        Map const &domain_map, Map const &range_map,
-        Kokkos::View<Coordinate const **, DeviceType> points ) const;
+        Teuchos::RCP<const Map> domain_map, Teuchos::RCP<const Map> range_map,
+        Kokkos::View<Coordinate const **, DeviceType> points );
 
     Teuchos::RCP<Operator> buildBasisOperator(
-        Map const &domain_map, Map const &range_map,
+        Teuchos::RCP<const Map> domain_map, Teuchos::RCP<const Map> range_map,
         Kokkos::View<Coordinate const **, DeviceType> source_points,
         Kokkos::View<Coordinate const **, DeviceType> target_points,
-        int const knn ) const;
+        int const knn );
 };
 
 } // end namespace DataTransferKit
