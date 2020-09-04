@@ -227,14 +227,14 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     if ( Teuchos::is_null( d_stratimikos_list ) )
     {
         d_stratimikos_list = Teuchos::parameterList( "Stratimikos" );
+        // clang-format off
         Teuchos::updateParametersFromXmlString(
             "<ParameterList name=\"Stratimikos\">"
-            "<Parameter name=\"Linear Solver Type\" type=\"string\" "
-            "value=\"Belos\"/>"
-            "<Parameter name=\"Preconditioner Type\" type=\"string\" "
-            "value=\"None\"/>"
+              "<Parameter name=\"Linear Solver Type\"  type=\"string\" value=\"Belos\"/>"
+              "<Parameter name=\"Preconditioner Type\" type=\"string\" value=\"None\"/>"
             "</ParameterList>",
             d_stratimikos_list.ptr() );
+        // clang-format on
     }
 
     // Create the inverse of the composite operator C.
@@ -267,7 +267,6 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
     DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
 
-    // Step 2: Construct vectors
     auto source = Teuchos::rcp( new Vector( S->getDomainMap(), 1 ) );
     auto destination = Teuchos::rcp( new Vector( N->getRangeMap(), 1 ) );
 
@@ -283,17 +282,6 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         const auto global_id = domain_map->getGlobalElement( i );
         source->replaceGlobalValue( global_id, 0, source_values( i ) );
     }
-
-    /*auto problem = Teuchos::rcp (new
-    Belos::LinearProblem<ScalarType,Vector,OperatorType>(_crs_matrix,
-    _source, _destination)); problem->setProblem();
-
-    Teuchos::RCP<Teuchos::ParameterList> params;
-    // params->set(...);
-    Belos::BlockGmresSolMgr<ScalarType,Vector,OperatorType> solver(
-    problem, params ); auto ret = solver.solve(); (void) ret;
-    DTK_REQUIRE(ret == Belos::Converged); auto solution =
-    problem->getLHS();*/
 
     auto thyra_X = Thyra::createMultiVector<SC>( source );
     auto thyra_Y = Thyra::createMultiVector<SC>( destination );
