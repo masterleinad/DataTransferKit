@@ -71,7 +71,36 @@ class SplineProlongationOperator
   public:
     // Constructor.
     SplineProlongationOperator( const int offset,
-                                const Teuchos::RCP<const Map> &domain_map );
+                                const Teuchos::RCP<const Map> &domain_map )
+        : d_offset( offset )
+        , d_domain_map( domain_map )
+    {
+        // Create a range map.
+        Teuchos::ArrayView<const GlobalOrdinal> domain_elements =
+            d_domain_map->getNodeElementList();
+        d_lda = domain_elements.size();
+        Teuchos::Array<GlobalOrdinal> global_ids;
+        GlobalOrdinal max_id = d_domain_map->getMaxAllGlobalIndex() + 1;
+        if ( d_domain_map->getComm()->getRank() == 0 )
+        {
+            global_ids.resize( d_offset + domain_elements.size() );
+            global_ids( d_offset, domain_elements.size() )
+                .assign( domain_elements );
+            for ( int i = 0; i < d_offset; ++i )
+            {
+                global_ids[i] = max_id + i;
+            }
+            domain_elements = global_ids();
+        }
+        else
+        {
+            d_offset = 0;
+        }
+        d_range_map =
+            Tpetra::createNonContigMap<LocalOrdinal, GlobalOrdinal, Node>(
+                domain_elements, d_domain_map->getComm() );
+        DTK_ENSURE( Teuchos::nonnull( d_range_map ) );
+    }
 
     //! The Map associated with the domain of this operator, which must be
     //! compatible with X.getMap().
@@ -97,8 +126,26 @@ class SplineProlongationOperator
     apply( const MultiVector &X, MultiVector &Y,
            Teuchos::ETransp mode = Teuchos::NO_TRANS,
            Scalar alpha = Teuchos::ScalarTraits<Scalar>::one(),
-           Scalar beta = Teuchos::ScalarTraits<Scalar>::zero() ) const override;
+           Scalar beta = Teuchos::ScalarTraits<Scalar>::zero() ) const override
+    {
+        DTK_REQUIRE( d_domain_map->isSameAs( *( X.getMap() ) ) );
+        DTK_REQUIRE( d_range_map->isSameAs( *( Y.getMap() ) ) );
+        DTK_REQUIRE( X.getNumVectors() == Y.getNumVectors() );
 
+        Y.scale( beta );
+
+        Teuchos::ArrayRCP<Teuchos::ArrayRCP<const Scalar>> X_view =
+            X.get2dView();
+        Teuchos::ArrayRCP<Teuchos::ArrayRCP<Scalar>> Y_view =
+            Y.get2dViewNonConst();
+        for ( unsigned n = 0; n < X.getNumVectors(); ++n )
+        {
+            for ( int i = 0; i < d_lda; ++i )
+            {
+                Y_view[n][i + d_offset] += alpha * X_view[n][i];
+            }
+        }
+    }
     /// \brief Whether this operator supports applying the transpose or
     /// conjugate transpose.
     bool hasTransposeApply() const override { return false; }
