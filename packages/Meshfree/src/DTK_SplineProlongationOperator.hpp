@@ -96,9 +96,9 @@ class SplineProlongationOperator
         {
             d_offset = 0;
         }
-        d_range_map =
-            Tpetra::createNonContigMap<LocalOrdinal, GlobalOrdinal, Node>(
-                domain_elements, d_domain_map->getComm() );
+        d_range_map = Tpetra::createNonContigMapWithNode<LocalOrdinal,
+                                                         GlobalOrdinal, Node>(
+            domain_elements, d_domain_map->getComm() );
         DTK_ENSURE( Teuchos::nonnull( d_range_map ) );
     }
 
