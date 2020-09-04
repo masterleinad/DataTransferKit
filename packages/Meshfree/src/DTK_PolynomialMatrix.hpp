@@ -59,31 +59,32 @@ namespace DataTransferKit
  * \brief Vector apply implementation for polynomial matrices.
  */
 //---------------------------------------------------------------------------//
-class PolynomialMatrix : public Tpetra::Operator<double, int, GlobalOrdinal>
+template <typename Scalar, typename LocalOrdinal, typename GlobalOrdinal,
+          typename Node>
+class PolynomialMatrix
+    : public Tpetra::Operator<typename Scalar, typename LocalOrdinal,
+                              typename GlobalOrdinal, typename Node>
 {
+    using Map = Tpetra::Map<LocalOrdinal, GlobalOrdinal, Node>;
+    using MultiVector =
+        Tpetra::MultiVector<Scalar, LocalOrdinal, GlobalOrdinal, Node>;
+
   public:
     // Constructor.
-    PolynomialMatrix(
-        const Teuchos::RCP<
-            const Tpetra::MultiVector<double, int, GlobalOrdinal>> &polynomial,
-        const Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> &domain_map,
-        const Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> &range_map );
+    PolynomialMatrix( const Teuchos::RCP<const MultiVector> &polynomial,
+                      const Teuchos::RCP<const Map> &domain_map,
+                      const Teuchos::RCP<const Map> &range_map );
 
     //! The Map associated with the domain of this operator, which must be
     //! compatible with X.getMap().
-    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>>
-    getDomainMap() const override
+    Teuchos::RCP<const Map> getDomainMap() const override
     {
         return d_domain_map;
     }
 
     //! The Map associated with the range of this operator, which must be
     //! compatible with Y.getMap().
-    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>>
-    getRangeMap() const override
-    {
-        return d_range_map;
-    }
+    Teuchos::RCP<const Map> getRangeMap() const override { return d_range_map; }
 
     //! \brief Computes the operator-multivector application.
     /*! Loosely, performs \f$Y = \alpha \cdot A^{\textrm{mode}} \cdot X +
@@ -95,11 +96,10 @@ class PolynomialMatrix : public Tpetra::Operator<double, int, GlobalOrdinal>
         (including NaNs) are ignored.
      */
     void
-    apply( const Tpetra::MultiVector<double, int, GlobalOrdinal> &X,
-           Tpetra::MultiVector<double, int, GlobalOrdinal> &Y,
+    apply( const MultiVector &X, MultiVector &Y,
            Teuchos::ETransp mode = Teuchos::NO_TRANS,
-           double alpha = Teuchos::ScalarTraits<double>::one(),
-           double beta = Teuchos::ScalarTraits<double>::zero() ) const override;
+           Scalar alpha = Teuchos::ScalarTraits<Scalar>::one(),
+           Scalar beta = Teuchos::ScalarTraits<Scalar>::zero() ) const override;
 
     /// \brief Whether this operator supports applying the transpose or
     /// conjugate transpose.
@@ -110,14 +110,13 @@ class PolynomialMatrix : public Tpetra::Operator<double, int, GlobalOrdinal>
     Teuchos::RCP<const Teuchos::Comm<int>> d_comm;
 
     // The polynomial.
-    Teuchos::RCP<const Tpetra::MultiVector<double, int, GlobalOrdinal>>
-        d_polynomial;
+    Teuchos::RCP<const MultiVector> d_polynomial;
 
     // Domain map.
-    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> d_domain_map;
+    Teuchos::RCP<const Map> d_domain_map;
 
     // Range map.
-    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> d_range_map;
+    Teuchos::RCP<const Map> d_range_map;
 };
 
 //---------------------------------------------------------------------------//

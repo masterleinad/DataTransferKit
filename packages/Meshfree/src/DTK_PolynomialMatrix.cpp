@@ -58,11 +58,12 @@ namespace DataTransferKit
 /*!
  * \brief Constructor.
  */
-PolynomialMatrix::PolynomialMatrix(
-    const Teuchos::RCP<const Tpetra::MultiVector<double, int, GlobalOrdinal>>
-        &polynomial,
-    const Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> &domain_map,
-    const Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> &range_map )
+template <typename Scalar, typename LocalOrdinal, typename GlobalOrdinal,
+          typename Node>
+PolynomialMatrix<Scalar, LocalOrdinal, GlobalOrdinal, Node>::PolynomialMatrix(
+    const Teuchos::RCP<const MultiVector> &polynomial,
+    const Teuchos::RCP<const Map> &domain_map,
+    const Teuchos::RCP<const Map> &range_map )
     : d_comm( polynomial->getMap()->getComm() )
     , d_polynomial( polynomial )
     , d_domain_map( domain_map )
@@ -72,10 +73,11 @@ PolynomialMatrix::PolynomialMatrix(
 
 //---------------------------------------------------------------------------//
 // Apply operation.
-void PolynomialMatrix::apply(
-    const Tpetra::MultiVector<double, int, GlobalOrdinal> &X,
-    Tpetra::MultiVector<double, int, GlobalOrdinal> &Y, Teuchos::ETransp mode,
-    double alpha, double beta ) const
+template <typename Scalar, typename LocalOrdinal, typename GlobalOrdinal,
+          typename Node>
+void PolynomialMatrix<Scalar, LocalOrdinal, GlobalOrdinal, Node>::apply(
+    const MultiVector &X, MultiVector &Y, Teuchos::ETransp mode, Scalar alpha,
+    Scalar beta ) const
 {
     DTK_REQUIRE( d_domain_map->isSameAs( *( X.getMap() ) ) );
     DTK_REQUIRE( d_range_map->isSameAs( *( Y.getMap() ) ) );
@@ -85,9 +87,9 @@ void PolynomialMatrix::apply(
     int poly_size = d_polynomial->getNumVectors();
     int num_vec = X.getNumVectors();
     int local_length = d_polynomial->getLocalLength();
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> poly_view =
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const Scalar>> poly_view =
         d_polynomial->get2dView();
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<double>> y_view = Y.get2dViewNonConst();
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<Scalar>> y_view = Y.get2dViewNonConst();
 
     // Scale Y by beta.
     Y.scale( beta );
@@ -96,10 +98,10 @@ void PolynomialMatrix::apply(
     if ( Teuchos::NO_TRANS == mode )
     {
         // Broadcast the polynomial components of X from the root rank.
-        Teuchos::Array<double> x_poly( poly_size * num_vec, 0.0 );
+        Teuchos::Array<Scalar> x_poly( poly_size * num_vec, 0.0 );
         if ( 0 == d_comm()->getRank() )
         {
-            Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> x_view =
+            Teuchos::ArrayRCP<Teuchos::ArrayRCP<const Scalar>> x_view =
                 X.get2dView();
             for ( int n = 0; n < num_vec; ++n )
             {
@@ -130,18 +132,17 @@ void PolynomialMatrix::apply(
     else if ( Teuchos::TRANS == mode )
     {
         // Make a work vector.
-        Tpetra::MultiVector<double, int, GlobalOrdinal> work(
-            Y.getMap(), Y.getNumVectors() );
+        MultiVector work( Y.getMap(), Y.getNumVectors() );
 
         // Export X to the polynomial decomposition.
-        Tpetra::Export<int, GlobalOrdinal> exporter( X.getMap(),
-                                                     work.getMap() );
+        Tpetra::Export<LocalOrdinal, GlobalOrdinal, Node> exporter(
+            X.getMap(), work.getMap() );
         work.doExport( X, exporter, Tpetra::INSERT );
 
         // Do the local mat-vec.
-        Teuchos::ArrayRCP<Teuchos::ArrayRCP<double>> work_view =
+        Teuchos::ArrayRCP<Teuchos::ArrayRCP<Scalar>> work_view =
             work.get2dViewNonConst();
-        Teuchos::Array<double> products( poly_size * num_vec, 0.0 );
+        Teuchos::Array<Scalar> products( poly_size * num_vec, 0.0 );
         int stride = 0;
         for ( int n = 0; n < num_vec; ++n )
         {
@@ -156,7 +157,7 @@ void PolynomialMatrix::apply(
         }
 
         // Reduce the results back to the root rank.
-        Teuchos::Array<double> product_sums( poly_size * num_vec, 0.0 );
+        Teuchos::Array<Scalar> product_sums( poly_size * num_vec, 0.0 );
 #ifdef HAVE_MPI
         Teuchos::RCP<const Teuchos::MpiComm<int>> mpi_comm =
             Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int>>( d_comm );

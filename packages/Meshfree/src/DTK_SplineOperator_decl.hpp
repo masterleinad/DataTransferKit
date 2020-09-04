@@ -44,7 +44,8 @@ class SplineOperator : public PointCloudOperator<DeviceType>
 {
     using LO = int;
     using GO = long;
-    using NO = Kokkos::Compat::KokkosDeviceWrapperNode<DeviceType>;
+    // using NO = Kokkos::Compat::KokkosDeviceWrapperNode<DeviceType>;
+    using NO = Kokkos::Compat::KokkosSerialWrapperNode;
     using SC = Coordinate;
 
     using CrsMatrix = Tpetra::CrsMatrix<SC, LO, GO, NO>;
@@ -70,6 +71,9 @@ class SplineOperator : public PointCloudOperator<DeviceType>
   private:
     MPI_Comm _comm;
 
+    Kokkos::View<int *, DeviceType> _ranks;
+    Kokkos::View<int *, DeviceType> _indices;
+
     // Prolongation operator.
     Teuchos::RCP<Operator> S;
 
@@ -93,9 +97,10 @@ class SplineOperator : public PointCloudOperator<DeviceType>
         Kokkos::View<Coordinate const **, DeviceType> points ) const;
 
     Teuchos::RCP<Operator> buildBasisOperator(
+        Map const &domain_map, Map const &range_map,
         Kokkos::View<Coordinate const **, DeviceType> source_points,
         Kokkos::View<Coordinate const **, DeviceType> target_points,
-        int const knn, MPI_Comm comm ) const;
+        int const knn ) const;
 };
 
 } // end namespace DataTransferKit

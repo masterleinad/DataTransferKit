@@ -41,18 +41,18 @@ Teuchos::RCP<
 SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                PolynomialBasis>::
     buildBasisOperator(
+        Map const &domain_map, Map const &range_map,
         Kokkos::View<Coordinate const **, DeviceType> source_points,
         Kokkos::View<Coordinate const **, DeviceType> target_points,
-        int const knn, MPI_Comm comm ) const
+        int const knn ) const
 {
+    auto teuchos_comm = domain_map.getComm();
+    auto teuchos_mpi_comm =
+        Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int>>( origComm );
+    MPI_Comm comm = ( *teuchos_mpi_comm->getRawMpiComm() )();
+
     int const num_source_points = source_points.extent( 0 );
     int const num_points = target_points.extent( 0 );
-
-    // Build map
-    auto teuchos_comm = Teuchos::rcp( new Teuchos::MpiComm<int>( comm ) );
-    auto map =
-        Teuchos::rcp( new Map( Teuchos::OrdinalTraits<GO>::invalid(),
-                               num_points, 0 /*indexBase*/, teuchos_comm ) );
 
     Kokkos::View<int *, DeviceType> offset( "offset", 0 );
     Kokkos::View<int *, DeviceType> ranks( "ranks", 0 );
@@ -71,6 +71,12 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
             comm, ranks, indices, source_points );
 
+    if ( source_points == target_points )
+    {
+        _ranks = ranks;
+        _indices = indices;
+    }
+
     // To build the radial basis function, we need to define the radius of
     // the radial basis function. Since we use kNN, we need to compute the
     // radius. We only need the coordinates of the source points because of
@@ -83,8 +89,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         source_points_with_halo, target_points, radius, offset,
         CompactlySupportedRadialBasisFunction() );
 
-    // build matrix
-    auto crs_matrix = Teuchos::rcp( new CrsMatrix( map, knn ) );
+    // Build matrix
+    auto crs_matrix = Teuchos::rcp( new CrsMatrix( range_map, knn ) );
 
     int rank_offset = 0;
     MPI_Scan( &num_source_points, &rank_offset, 1, MPI_INT, MPI_SUM, comm );
@@ -106,7 +112,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
                 Teuchos::tuple<SC>( phi( j ) ) );
         }
 
-    crs_matrix->fillComplete();
+    crs_matrix->fillComplete( domain_map, range_map );
     DTK_ENSURE( crs_matrix->isFillComplete() );
 
     return crs_matrix;
@@ -128,16 +134,17 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     DTK_REQUIRE( spatial_dim == 3 );
 
-    auto v = Teuchos::rcp( new Vector( map, spatial_dim + 1 ) );
+    auto v = Teuchos::rcp( new Vector( range_map, spatial_dim + 1 ) );
 
     for ( LO i = 0; i < n; ++i )
     {
-        const auto global_id = map->getGlobalElement( i );
+        const auto global_id = range_map->getGlobalElement( i );
         v->replaceGlobalValue( global_id, 0, 1.0 );
         for ( int d = 0; d < spatial_dim; ++d )
             v->replaceGlobalValue( global_id, d + 1, points( i, d ) );
     }
-    return Teuchos::rcp( new PolynomialMatrix( v, domain_map, range_map ) );
+    return Teuchos::rcp(
+        new PolynomialMatrix<SC, LO, GO, NO>( v, domain_map, range_map ) );
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,
@@ -156,24 +163,33 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     DTK_REQUIRE( source_points.extent_int( 1 ) == 3 );
     constexpr int spatial_dim = 3;
 
-    // Step 1: build matrices
     constexpr int knn = PolynomialBasis::size;
 
+    // Step 0: build source and target maps
+    auto teuchos_comm = Teuchos::rcp( new Teuchos::MpiComm<int>( comm ) );
+    auto source_map = Teuchos::rcp(
+        new Map( Teuchos::OrdinalTraits<GO>::invalid(),
+                 source_points.extent( 0 ), 0 /*indexBase*/, teuchos_comm ) );
+    auto target_map = Teuchos::rcp(
+        new Map( Teuchos::OrdinalTraits<GO>::invalid(),
+                 target_points.extent( 0 ), 0 /*indexBase*/, teuchos_comm ) );
+
+    // Step 1: build matrices
+    GO prolongation_offset = teuchos_comm->getRank() ? 0 : spatial_dim + 1;
+    S = Teuchos::rcp( new SplineProlongationOperator<SC, LO, GO, NO>(
+        prolongation_offset, source_map ) );
+    auto prolongation_map = S->getRangeMap();
+
     // Build distributed search tree over the source points.
-    M = buildBasisOperator( source_points, source_points, knn, comm );
-    N = buildBasisOperator( source_points, target_points, knn, comm );
-
-    // FIXME: What are domain maps here?
-    Map wtf_map;
-    P = buildPolynomialOperator( wtf_map, *( M->getRangeMap() ),
+    // NOTE: M is not the M from the paper, but an extended size block matrix
+    M = buildBasisOperator( *prolongation_map, *prolongation_map, source_points,
+                            source_points, knn );
+    P = buildPolynomialOperator( *prolongation_map, *prolongation_map,
                                  source_points );
-    Q = buildPolynomialOperator( wtf_map, *( N->getRangeMap() ),
+    N = buildBasisOperator( *prolongation_map, *target_map, source_points,
+                            target_points, knn );
+    Q = buildPolynomialOperator( *prolongation_map, *target_map,
                                  target_points );
-
-    GO prolongation_offset =
-        N->getDomainMap()->getComm()->getRank() ? 0 : spatial_dim + 1;
-    S = Teuchos::rcp( new SplineProlongationOperator( prolongation_offset,
-                                                      M->getDomainMap() ) );
 
     // Step 3: build Thyra operator: A = (Q + N)*[(P + M + P^T)^-1]*S
     auto thyraWrapper = []( Teuchos::RCP<Operator> &op ) {
@@ -247,7 +263,7 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     std::cout << "start apply" << std::endl;
 
     // Precondition: check that the source and the target are properly sized
-    DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
+    // DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
     DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
 
     // Step 2: Construct vectors
@@ -256,7 +272,7 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     // Retrieve values for all source points
     source_values = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
-        _comm, _ranks, indices, source_values );
+        _comm, _ranks, _indices, source_values );
 
     auto domain_map = M->getDomainMap();
 
