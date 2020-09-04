@@ -90,7 +90,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         CompactlySupportedRadialBasisFunction() );
 
     // Build matrix
-    auto crs_matrix = Teuchos::rcp( new CrsMatrix( range_map, knn ) );
+    auto row_map = range_map;
+    auto crs_matrix = Teuchos::rcp( new CrsMatrix( row_map, knn ) );
 
     int rank_offset = 0;
     MPI_Scan( &num_source_points, &rank_offset, 1, MPI_INT, MPI_SUM, comm );
@@ -104,7 +105,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     for ( LO i = 0; i < num_points; ++i )
         for ( int j = offset( i ); j < offset( i + 1 ); ++j )
         {
-            const auto global_id = domain_map->getGlobalElement( i );
+            const auto global_id = row_map->getGlobalElement( i );
             crs_matrix->insertGlobalValues(
                 global_id,
                 Teuchos::tuple<GO>( cumulative_points_per_process[ranks( j )] +
