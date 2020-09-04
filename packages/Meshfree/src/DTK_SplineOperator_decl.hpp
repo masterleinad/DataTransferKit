@@ -42,9 +42,15 @@ template <typename DeviceType,
           typename PolynomialBasis = MultivariatePolynomialBasis<Linear, 3>>
 class SplineOperator : public PointCloudOperator<DeviceType>
 {
-    using VectorType = Tpetra::MultiVector<>;
-    using OperatorType = Tpetra::Operator<>;
-    using ScalarType = double;
+    using LO = int;
+    using GO = long;
+    using NO = Kokkos::Compat::KokkosDeviceWrapperNode<DeviceType>;
+    using SC = Coordinate;
+
+    using CrsMatrix = Tpetra::CrsMatrix<SC, LO, GO, NO>;
+    using Map = Tpetra::Map<LO, GO, NO>;
+    using Operator = Tpetra::Operator<SC, LO, GO, NO>;
+    using Vector = Tpetra::MultiVector<SC, LO, GO, NO>;
 
   public:
     using device_type = DeviceType;
@@ -63,40 +69,33 @@ class SplineOperator : public PointCloudOperator<DeviceType>
 
   private:
     MPI_Comm _comm;
-    LocalOrdinal const _n_source_points;
-    Kokkos::View<int *, DeviceType> _offset;
-    Kokkos::View<int *, DeviceType> _ranks;
-    Kokkos::View<int *, DeviceType> _indices;
-
-    Kokkos::View<int *, DeviceType> target_offset;
-    Kokkos::View<int *, DeviceType> target_ranks;
-    Kokkos::View<int *, DeviceType> target_indices;
-
-    Kokkos::View<double *, DeviceType> _coeffs;
-    Teuchos::RCP<Tpetra::CrsMatrix<>> _crs_matrix;
-    Teuchos::RCP<Tpetra::Map<>> _destination_map;
-    Teuchos::RCP<Tpetra::Map<>> _source_map;
-    std::vector<int> cumulative_points_per_process;
-    Teuchos::RCP<Tpetra::MultiVector<>> _source;
-    Teuchos::RCP<Tpetra::MultiVector<>> _destination;
 
     // Prolongation operator.
-    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> S;
+    Teuchos::RCP<Operator> S;
 
     // Coefficient matrix polynomial component.
-    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> P;
+    Teuchos::RCP<Operator> P;
 
     // Coefficient matrix basis component.
-    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> M;
+    Teuchos::RCP<Operator> M;
 
     // Evaluation matrix polynomial component.
-    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> Q;
+    Teuchos::RCP<Operator> Q;
 
     // Evaluation matrix basis component.
-    Teuchos::RCP<const Tpetra::Operator<double, int, GlobalOrdinal>> N;
+    Teuchos::RCP<Operator> N;
 
     // Coupling matrix
-    Teuchos::RCP<const Thyra::LinearOpBase<double>> d_coupling_matrix;
+    Teuchos::RCP<const Thyra::LinearOpBase<SC>> _thyra_operator;
+
+    Teuchos::RCP<Operator> buildPolynomialOperator(
+        Map const &domain_map, Map const &range_map,
+        Kokkos::View<Coordinate const **, DeviceType> points ) const;
+
+    Teuchos::RCP<Operator> buildBasisOperator(
+        Kokkos::View<Coordinate const **, DeviceType> source_points,
+        Kokkos::View<Coordinate const **, DeviceType> target_points,
+        int const knn, MPI_Comm comm ) const;
 };
 
 } // end namespace DataTransferKit
