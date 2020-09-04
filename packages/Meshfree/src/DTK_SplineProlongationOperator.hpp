@@ -83,12 +83,12 @@ class SplineProlongationOperator
         GlobalOrdinal max_id = d_domain_map->getMaxAllGlobalIndex() + 1;
         if ( d_domain_map->getComm()->getRank() == 0 )
         {
-            const auto old_size = domain_elements.size();
-            global_ids.resize( d_offset + old_size );
-            global_ids( 0, old_size ).assign( domain_elements );
+            global_ids.resize( d_offset + domain_elements.size() );
+            global_ids( d_offset, domain_elements.size() )
+                .assign( domain_elements );
             for ( int i = 0; i < d_offset; ++i )
             {
-                global_ids[old_size + i] = max_id + i;
+                global_ids[i] = max_id + i;
             }
             domain_elements = global_ids();
         }
