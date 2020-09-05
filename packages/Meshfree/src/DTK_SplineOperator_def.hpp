@@ -46,6 +46,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Kokkos::View<Coordinate const **, DeviceType> target_points,
         int const knn )
 {
+    const int spatial_dim = target_points.extent( 1 );
+
     auto teuchos_comm = domain_map->getComm();
     auto teuchos_mpi_comm =
         Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int>>( teuchos_comm );
@@ -71,12 +73,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
             comm, ranks, indices, source_points );
 
-    if ( source_points == target_points )
-    {
-        _ranks = ranks;
-        _indices = indices;
-    }
-
     // To build the radial basis function, we need to define the radius of
     // the radial basis function. Since we use kNN, we need to compute the
     // radius. We only need the coordinates of the source points because of
@@ -89,10 +85,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         source_points_with_halo, target_points, radius, offset,
         CompactlySupportedRadialBasisFunction() );
 
-    // Build matrix
-    auto row_map = range_map;
-    auto crs_matrix = Teuchos::rcp( new CrsMatrix( row_map, knn ) );
-
+    // Compute some helper arrays
     int rank_offset = 0;
     MPI_Scan( &num_source_points, &rank_offset, 1, MPI_INT, MPI_SUM, comm );
 
@@ -102,15 +95,34 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     MPI_Allgather( &rank_offset, 1, MPI_INT,
                    &( cumulative_points_per_process[1] ), 1, MPI_INT, comm );
 
+    bool is_M = ( source_points == target_points );
+
+    // Build matrix
+    auto row_map = range_map;
+    auto crs_matrix = Teuchos::rcp( new CrsMatrix( row_map, knn ) );
+
+    GO prolongation_offset = 0;
+    if ( source_points == target_points )
+    {
+        _ranks = ranks;
+        _indices = indices;
+
+        prolongation_offset =
+            ( teuchos_comm->getRank() == 0 ? spatial_dim + 1 : 0 );
+    }
+
     for ( LO i = 0; i < num_points; ++i )
         for ( int j = offset( i ); j < offset( i + 1 ); ++j )
         {
-            const auto global_id = row_map->getGlobalElement( i );
-            crs_matrix->insertGlobalValues(
-                global_id,
-                Teuchos::tuple<GO>( cumulative_points_per_process[ranks( j )] +
-                                    indices( j ) ),
-                Teuchos::tuple<SC>( phi( j ) ) );
+            const auto row_index =
+                row_map->getGlobalElement( prolongation_offset + i );
+            const auto col_index =
+                cumulative_points_per_process[ranks( j )] + indices( j );
+            const auto value = phi( j );
+
+            crs_matrix->insertGlobalValues( row_index,
+                                            Teuchos::tuple<GO>( col_index ),
+                                            Teuchos::tuple<SC>( value ) );
         }
 
     crs_matrix->fillComplete( domain_map, range_map );
@@ -182,7 +194,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     auto prolongation_map = S->getRangeMap();
 
     // Build distributed search tree over the source points.
-    // NOTE: M is not the M from the paper, but an extended size block matrix
+    // NOTE: M is not the M from the paper, but an extended size block
+    // matrix
     M = buildBasisOperator( prolongation_map, prolongation_map, source_points,
                             source_points, knn );
     P = buildPolynomialOperator( prolongation_map, prolongation_map,
@@ -221,21 +234,21 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     Teuchos::RCP<const Thyra::LinearOpBase<SC>> thyra_C =
         Thyra::add<SC>( thyra_PpM, thyra_P_T );
 
-    // If we didnt get stratimikos parameters from the input list, create
-    // some here.
-    Teuchos::RCP<Teuchos::ParameterList> d_stratimikos_list;
-    if ( Teuchos::is_null( d_stratimikos_list ) )
-    {
-        d_stratimikos_list = Teuchos::parameterList( "Stratimikos" );
-        // clang-format off
-        Teuchos::updateParametersFromXmlString(
-            "<ParameterList name=\"Stratimikos\">"
-              "<Parameter name=\"Linear Solver Type\"  type=\"string\" value=\"Belos\"/>"
-              "<Parameter name=\"Preconditioner Type\" type=\"string\" value=\"None\"/>"
-            "</ParameterList>",
-            d_stratimikos_list.ptr() );
-        // clang-format on
-    }
+    // Create parameters for stratimikos to setup the inverse operator.
+    auto d_stratimikos_list = Teuchos::parameterList( "Stratimikos" );
+    d_stratimikos_list->set( "Linear Solver Type", "Belos" );
+    d_stratimikos_list->set( "Preconditioner Type", "None" );
+    auto &linear_solver_types_list =
+        d_stratimikos_list->sublist( "Linear Solver Types" );
+    auto &belos_list = linear_solver_types_list.sublist( "Belos" );
+    belos_list.set( "Solver Type", "Pseudo Block GMRES" );
+    auto &solver_types_list = belos_list.sublist( "Solver Types" );
+    auto &gmres_list = solver_types_list.sublist( "Pseudo Block GMRES" );
+    gmres_list.set( "Convergence Tolerance", 1.0e-10 );
+    gmres_list.set( "Verbosity",
+                    Belos::Errors + Belos::Warnings + Belos::TimingDetails +
+                        Belos::FinalSummary + Belos::StatusTestDetails );
+    gmres_list.set( "Output Frequency", 1 );
 
     // Create the inverse of the composite operator C.
     Stratimikos::DefaultLinearSolverBuilder builder;
@@ -267,14 +280,15 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
     DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
 
-    auto source = Teuchos::rcp( new Vector( S->getDomainMap(), 1 ) );
-    auto destination = Teuchos::rcp( new Vector( N->getRangeMap(), 1 ) );
+    auto domain_map = S->getDomainMap();
+    auto range_map = N->getRangeMap();
+
+    auto source = Teuchos::rcp( new Vector( domain_map, 1 ) );
+    auto destination = Teuchos::rcp( new Vector( range_map, 1 ) );
 
     // Retrieve values for all source points
     source_values = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
         _comm, _ranks, _indices, source_values );
-
-    auto domain_map = M->getDomainMap();
 
     // copy source_values to source
     for ( unsigned int i = 0; i < _ranks.extent( 0 ); ++i )
