@@ -109,28 +109,26 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     auto row_map = range_map;
     auto crs_matrix = Teuchos::rcp( new CrsMatrix( row_map, knn ) );
 
-    GO prolongation_offset = 0;
     if ( is_M )
     {
         _ranks = ranks;
         _indices = indices;
-
-        prolongation_offset =
-            ( teuchos_comm->getRank() == 0 ? spatial_dim + 1 : 0 );
     }
 
     for ( LO i = 0; i < num_points; ++i )
         for ( int j = offset( i ); j < offset( i + 1 ); ++j )
         {
-            const auto row_index =
-                row_map->getGlobalElement( prolongation_offset + i );
-            const auto col_index =
-                cumulative_points_per_process[ranks( j )] + indices( j );
-            const auto value = phi( j );
+            std::cout << ( is_M ? "M" : "N" ) << " insert ("
+                      << row_map->getGlobalElement( i ) << ","
+                      << cumulative_points_per_process[ranks( j )] +
+                             indices( j )
+                      << ")" << std::endl;
 
-            crs_matrix->insertGlobalValues( row_index,
-                                            Teuchos::tuple<GO>( col_index ),
-                                            Teuchos::tuple<SC>( value ) );
+            crs_matrix->insertGlobalValues(
+                row_map->getGlobalElement( i ),
+                Teuchos::tuple<GO>( cumulative_points_per_process[ranks( j )] +
+                                    indices( j ) ),
+                Teuchos::tuple<SC>( phi( j ) ) );
         }
 
     crs_matrix->fillComplete( domain_map, range_map );

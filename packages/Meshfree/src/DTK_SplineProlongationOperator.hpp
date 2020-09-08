@@ -70,31 +70,28 @@ class SplineProlongationOperator
 
   public:
     // Constructor.
-    SplineProlongationOperator( const int offset,
+    SplineProlongationOperator( const int num_polynomial_dofs,
                                 const Teuchos::RCP<const Map> &domain_map )
-        : d_offset( offset )
-        , d_domain_map( domain_map )
+        : d_domain_map( domain_map )
     {
         // Create a range map.
         Teuchos::ArrayView<const GlobalOrdinal> domain_elements =
             d_domain_map->getNodeElementList();
         d_lda = domain_elements.size();
-        Teuchos::Array<GlobalOrdinal> global_ids;
-        GlobalOrdinal max_id = d_domain_map->getMaxAllGlobalIndex() + 1;
+
+        const auto old_size = domain_elements.size();
+        Teuchos::Array<GlobalOrdinal> global_ids( old_size +
+                                                  num_polynomial_dofs );
         if ( d_domain_map->getComm()->getRank() == 0 )
         {
-            const auto old_size = domain_elements.size();
-            global_ids.resize( d_offset + old_size );
+            GlobalOrdinal max_id = d_domain_map->getMaxAllGlobalIndex() + 1;
+
             global_ids( 0, old_size ).assign( domain_elements );
-            for ( int i = 0; i < d_offset; ++i )
+            for ( int i = 0; i < num_polynomial_dofs; ++i )
             {
                 global_ids[old_size + i] = max_id + i;
             }
             domain_elements = global_ids();
-        }
-        else
-        {
-            d_offset = 0;
         }
         d_range_map = Tpetra::createNonContigMapWithNode<LocalOrdinal,
                                                          GlobalOrdinal, Node>(
@@ -142,7 +139,7 @@ class SplineProlongationOperator
         {
             for ( int i = 0; i < d_lda; ++i )
             {
-                Y_view[n][i + d_offset] += alpha * X_view[n][i];
+                Y_view[n][i] += alpha * X_view[n][i];
             }
         }
     }
@@ -151,9 +148,6 @@ class SplineProlongationOperator
     bool hasTransposeApply() const override { return false; }
 
   private:
-    // Prolongation offset.
-    int d_offset;
-
     // LDA
     int d_lda;
 
