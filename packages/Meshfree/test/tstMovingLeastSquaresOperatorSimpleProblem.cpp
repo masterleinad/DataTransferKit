@@ -120,12 +120,12 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MovingLeastSquaresOperatorSimpleProblem,
     // single point
     {
         std::vector<std::array<DataTransferKit::Coordinate, DIM>>
-            source_points = {{1., 1., 1.}};
+            source_points = {{1., 1., 1.}, {2., 2., 2.}};
         std::vector<std::array<DataTransferKit::Coordinate, DIM>>
-            target_points = {{1., 1., 1.}};
+            target_points = {{1.5, 1.5, 1.5}};
         MLS<DeviceType> mls( source_points, target_points );
 
-        std::vector<double> source_values = {255.};
+        std::vector<double> source_values = {255., 255.};
         std::vector<double> target_values = {0.};
         mls.apply( source_values, target_values );
 
