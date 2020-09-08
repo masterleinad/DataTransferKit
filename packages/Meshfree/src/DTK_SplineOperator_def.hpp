@@ -17,8 +17,8 @@
 #include <BelosLinearProblem.hpp>
 #include <BelosTpetraAdapter.hpp>
 #include <DTK_DBC.hpp>
+#include <DTK_DetailsMovingLeastSquaresOperatorImpl.hpp>
 #include <DTK_DetailsNearestNeighborOperatorImpl.hpp> // fetch
-#include <DTK_DetailsSplineOperatorImpl.hpp>
 #include <DTK_PolynomialMatrix.hpp>
 #include <DTK_SplineProlongationOperator.hpp>
 
@@ -46,6 +46,8 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Kokkos::View<Coordinate const **, DeviceType> target_points,
         int const knn )
 {
+    bool const is_M = ( source_points == target_points );
+
     const int spatial_dim = target_points.extent( 1 );
 
     auto teuchos_comm = domain_map->getComm();
@@ -56,16 +58,18 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     int const num_source_points = source_points.extent( 0 );
     int const num_points = target_points.extent( 0 );
 
-    Kokkos::View<int *, DeviceType> offset( "offset", 0 );
-    Kokkos::View<int *, DeviceType> ranks( "ranks", 0 );
-    Kokkos::View<int *, DeviceType> indices( "indices", 0 );
     ArborX::DistributedSearchTree<DeviceType> distributed_tree( comm,
                                                                 source_points );
     DTK_CHECK( !distributed_tree.empty() );
 
     // Perform the actual search.
-    auto queries = Details::SplineOperatorImpl<DeviceType>::makeKNNQueries(
-        target_points, knn );
+    auto queries =
+        Details::MovingLeastSquaresOperatorImpl<DeviceType>::makeKNNQueries(
+            target_points, knn );
+
+    Kokkos::View<int *, DeviceType> offset( "offset", 0 );
+    Kokkos::View<int *, DeviceType> ranks( "ranks", 0 );
+    Kokkos::View<int *, DeviceType> indices( "indices", 0 );
     distributed_tree.query( queries, indices, offset, ranks );
 
     // Retrieve the coordinates of all points that met the predicates.
@@ -73,17 +77,23 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
             comm, ranks, indices, source_points );
 
+    auto transformed_source_points = Details::MovingLeastSquaresOperatorImpl<
+        DeviceType>::transformSourceCoordinates( source_points_with_halo,
+                                                 offset, target_points );
+
     // To build the radial basis function, we need to define the radius of
     // the radial basis function. Since we use kNN, we need to compute the
     // radius. We only need the coordinates of the source points because of
     // the transformation of the coordinates.
-    auto radius = Details::SplineOperatorImpl<DeviceType>::computeRadius(
-        source_points_with_halo, target_points, offset );
+    auto radius =
+        Details::MovingLeastSquaresOperatorImpl<DeviceType>::computeRadius(
+            transformed_source_points, offset );
 
     // Build phi (weight matrix)
-    auto phi = Details::SplineOperatorImpl<DeviceType>::computeWeights(
-        source_points_with_halo, target_points, radius, offset,
-        CompactlySupportedRadialBasisFunction() );
+    auto phi =
+        Details::MovingLeastSquaresOperatorImpl<DeviceType>::computeWeights(
+            transformed_source_points, radius,
+            CompactlySupportedRadialBasisFunction() );
 
     // Compute some helper arrays
     int rank_offset = 0;
@@ -95,14 +105,12 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     MPI_Allgather( &rank_offset, 1, MPI_INT,
                    &( cumulative_points_per_process[1] ), 1, MPI_INT, comm );
 
-    bool is_M = ( source_points == target_points );
-
     // Build matrix
     auto row_map = range_map;
     auto crs_matrix = Teuchos::rcp( new CrsMatrix( row_map, knn ) );
 
     GO prolongation_offset = 0;
-    if ( source_points == target_points )
+    if ( is_M )
     {
         _ranks = ranks;
         _indices = indices;
