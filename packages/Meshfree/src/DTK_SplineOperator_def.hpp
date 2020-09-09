@@ -299,12 +299,8 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     auto source = Teuchos::rcp( new Vector( domain_map, 1 ) );
     auto destination = Teuchos::rcp( new Vector( range_map, 1 ) );
 
-    // Retrieve values for all source points
-    source_values = Details::NearestNeighborOperatorImpl<DeviceType>::fetch(
-        _comm, _ranks, _indices, source_values );
-
     // copy source_values to source
-    for ( unsigned int i = 0; i < _ranks.extent( 0 ); ++i )
+    for ( unsigned int i = 0; i < source_values.extent( 0 ); ++i )
     {
         const auto global_id = domain_map->getGlobalElement( i );
         source->replaceGlobalValue( global_id, 0, source_values( i ) );
