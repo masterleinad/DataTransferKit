@@ -147,11 +147,9 @@ class PolynomialMatrix
                     X.get2dView();
                 for ( int n = 0; n < num_vec; ++n )
                 {
-		    auto const size  = x_view[n].size();
-                    std::copy( &x_view[n][size-poly_size], &x_view[n][0] + size,
-                               &x_poly[n * poly_size] );
-/*		    for (int i=0; i< poly_size; ++i)
-			    std::cout << "x(" << n << "," << i << ") " << x_view[n][i] << std::endl;*/
+                    auto const size = x_view[n].size();
+                    std::copy( &x_view[n][size - poly_size],
+                               &x_view[n][0] + size, &x_poly[n * poly_size] );
                 }
             }
             Teuchos::broadcast( *d_comm, 0, x_poly() );
@@ -237,7 +235,8 @@ class PolynomialMatrix
                     auto const size = y_view[n].size();
                     for ( int p = 0; p < poly_size; ++p )
                     {
-                        y_view[n][p+size-poly_size] += alpha * product_sums[n * poly_size + p];
+                        y_view[n][p + size - poly_size] +=
+                            alpha * product_sums[n * poly_size + p];
                     }
                 }
             }

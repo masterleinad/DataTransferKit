@@ -38,38 +38,38 @@
  */
 //---------------------------------------------------------------------------//
 
-#include <iostream>
-#include <vector>
 #include <cmath>
+#include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
-#include <limits>
+#include <vector>
 
-#include <DTK_PolynomialMatrix.hpp>
 #include "DTK_Types.h"
+#include <DTK_PolynomialMatrix.hpp>
 
-#include "Teuchos_UnitTestHarness.hpp"
-#include "Teuchos_RCP.hpp"
 #include "Teuchos_Array.hpp"
-#include "Teuchos_DefaultComm.hpp"
 #include "Teuchos_CommHelpers.hpp"
+#include "Teuchos_DefaultComm.hpp"
+#include "Teuchos_RCP.hpp"
+#include "Teuchos_UnitTestHarness.hpp"
 
+#include <Tpetra_CrsMatrix.hpp>
 #include <Tpetra_Map.hpp>
 #include <Tpetra_MultiVector.hpp>
-#include <Tpetra_CrsMatrix.hpp>
 
 //---------------------------------------------------------------------------//
 // HELPER FUNCTIONS
 //---------------------------------------------------------------------------//
 
 // Get the default communicator.
-template<class Ordinal>
-Teuchos::RCP<const Teuchos::Comm<Ordinal> > getDefaultComm()
+template <class Ordinal>
+Teuchos::RCP<const Teuchos::Comm<Ordinal>> getDefaultComm()
 {
 #ifdef HAVE_MPI
     return Teuchos::DefaultComm<Ordinal>::getComm();
 #else
-    return Teuchos::rcp(new Teuchos::SerialComm<Ordinal>() );
+    return Teuchos::rcp( new Teuchos::SerialComm<Ordinal>() );
 #endif
 }
 
@@ -78,161 +78,177 @@ Teuchos::RCP<const Teuchos::Comm<Ordinal> > getDefaultComm()
 //---------------------------------------------------------------------------//
 
 const double epsilon_abs = 1.0e-12;
-const double epsilon_rel = 1.0e-7/100.0; // percent tolerance divided by 100
+const double epsilon_rel = 1.0e-7 / 100.0; // percent tolerance divided by 100
 
 //---------------------------------------------------------------------------//
 // Unit tests.
 //---------------------------------------------------------------------------//
-TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( PolynomialMatrix, polynomial_matrix_apply , DeviceType)
+TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( PolynomialMatrix, polynomial_matrix_apply,
+                                   DeviceType )
 {
     // Make an equivalent polynomial matrix and CrsMatrix and apply it to a
     // multivector.
-    Teuchos::RCP<const Teuchos::Comm<int> > comm = getDefaultComm<int>();
+    Teuchos::RCP<const Teuchos::Comm<int>> comm = getDefaultComm<int>();
     int local_size = 100;
     int global_size = local_size * comm->getSize();
     int num_vec = 3;
     int poly_size = 10;
 
     // Create a random polynomial.
-    Teuchos::RCP<const Tpetra::Map<int,GlobalOrdinal> > row_map = 
-	Tpetra::createUniformContigMap<int,GlobalOrdinal>( global_size, comm );
-    Teuchos::RCP<Tpetra::MultiVector<double,int,GlobalOrdinal> > P =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal>( row_map, poly_size );
+    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> row_map =
+        Tpetra::createUniformContigMap<int, GlobalOrdinal>( global_size, comm );
+    Teuchos::RCP<Tpetra::MultiVector<double, int, GlobalOrdinal>> P =
+        Tpetra::createMultiVector<double, int, GlobalOrdinal>( row_map,
+                                                               poly_size );
     P->randomize();
 
     // Create the CrsMatrix version of the polynomial.
-    Teuchos::RCP<const Tpetra::Map<int,GlobalOrdinal> > col_map = 
-	Tpetra::createLocalMap<int,GlobalOrdinal>( poly_size, comm );
-    Teuchos::RCP<Tpetra::CrsMatrix<double,int,GlobalOrdinal> > P_crs = Teuchos::rcp(
-	new Tpetra::CrsMatrix<double,int,GlobalOrdinal>( 
-	    row_map, col_map, poly_size, Tpetra::StaticProfile) );
+    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> col_map =
+        Tpetra::createLocalMap<int, GlobalOrdinal>( poly_size, comm );
+    Teuchos::RCP<Tpetra::CrsMatrix<double, int, GlobalOrdinal>> P_crs =
+        Teuchos::rcp( new Tpetra::CrsMatrix<double, int, GlobalOrdinal>(
+            row_map, col_map, poly_size, Tpetra::StaticProfile ) );
     Teuchos::Array<int> crs_indices( poly_size );
     for ( int j = 0; j < poly_size; ++j )
     {
-	crs_indices[j] = j;
+        crs_indices[j] = j;
     }
     Teuchos::Array<double> crs_values( poly_size );
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double> > poly_view = 
-	P->get2dView();
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> poly_view =
+        P->get2dView();
     for ( int i = 0; i < local_size; ++i )
     {
-	for ( int j = 0; j < poly_size; ++j )
-	{
-	    crs_values[j] = poly_view[j][i];
-	}
-	P_crs->insertLocalValues( i, crs_indices(), crs_values() );
+        for ( int j = 0; j < poly_size; ++j )
+        {
+            crs_values[j] = poly_view[j][i];
+        }
+        P_crs->insertLocalValues( i, crs_indices(), crs_values() );
     }
-    P_crs->fillComplete();    
+    P_crs->fillComplete();
 
     // Create the PolynomialMatrix version of the polynomial.
-    DataTransferKit::PolynomialMatrix<double,int,GlobalOrdinal, DeviceType> P_poly_mat( P, row_map, row_map );
+    DataTransferKit::PolynomialMatrix<double, int, GlobalOrdinal, DeviceType>
+        P_poly_mat( P, row_map, row_map );
 
     // Build a random vector to apply the matrices to.
-    auto X =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal,DeviceType>( row_map, num_vec );
+    auto X = Tpetra::createMultiVector<double, int, GlobalOrdinal, DeviceType>(
+        row_map, num_vec );
     X->randomize();
 
     // Apply the CrsMatrix.
     auto Y_crs =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal,DeviceType>( row_map, num_vec );
+        Tpetra::createMultiVector<double, int, GlobalOrdinal, DeviceType>(
+            row_map, num_vec );
     Y_crs->randomize();
     P_crs->apply( *X, *Y_crs, Teuchos::NO_TRANS );
 
     // Apply the polynomial matrix.
-    Teuchos::RCP<Tpetra::MultiVector<double,int,GlobalOrdinal> > Y_poly_mat =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal>( row_map, num_vec );
+    Teuchos::RCP<Tpetra::MultiVector<double, int, GlobalOrdinal>> Y_poly_mat =
+        Tpetra::createMultiVector<double, int, GlobalOrdinal>( row_map,
+                                                               num_vec );
     Y_poly_mat->randomize();
     P_poly_mat.apply( *X, *Y_poly_mat, Teuchos::NO_TRANS );
 
     // Compare the results.
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double> > y_crs_view = 
-	Y_crs->get2dView();
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double> > y_pm_view = 
-	Y_poly_mat->get2dView();
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> y_crs_view =
+        Y_crs->get2dView();
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> y_pm_view =
+        Y_poly_mat->get2dView();
     for ( int i = 0; i < num_vec; ++i )
     {
-	for ( int j = 0; j < local_size; ++j )
-	{
-	    TEST_FLOATING_EQUALITY( y_crs_view[i][j], y_pm_view[i][j], epsilon_rel );
-	    TEST_COMPARE( std::abs(y_crs_view[i][j] - y_pm_view[i][j]), <=, epsilon_abs );
-	}
+        for ( int j = 0; j < local_size; ++j )
+        {
+            TEST_FLOATING_EQUALITY( y_crs_view[i][j], y_pm_view[i][j],
+                                    epsilon_rel );
+            TEST_COMPARE( std::abs( y_crs_view[i][j] - y_pm_view[i][j] ), <=,
+                          epsilon_abs );
+        }
     }
 }
 
 //---------------------------------------------------------------------------//
-TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( PolynomialMatrix, polynomial_matrix_transpose_apply , DeviceType)
+TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( PolynomialMatrix,
+                                   polynomial_matrix_transpose_apply,
+                                   DeviceType )
 {
     // Make an equivalent polynomial matrix and CrsMatrix and apply it to a
     // multivector.
-    Teuchos::RCP<const Teuchos::Comm<int> > comm = getDefaultComm<int>();
+    Teuchos::RCP<const Teuchos::Comm<int>> comm = getDefaultComm<int>();
     int local_size = 100;
     int global_size = local_size * comm->getSize();
     int num_vec = 3;
     int poly_size = 10;
 
     // Create a random polynomial.
-    Teuchos::RCP<const Tpetra::Map<int,GlobalOrdinal> > row_map = 
-	Tpetra::createUniformContigMap<int,GlobalOrdinal>( global_size, comm );
-    Teuchos::RCP<Tpetra::MultiVector<double,int,GlobalOrdinal> > P =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal>( row_map, poly_size );
+    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> row_map =
+        Tpetra::createUniformContigMap<int, GlobalOrdinal>( global_size, comm );
+    Teuchos::RCP<Tpetra::MultiVector<double, int, GlobalOrdinal>> P =
+        Tpetra::createMultiVector<double, int, GlobalOrdinal>( row_map,
+                                                               poly_size );
     P->randomize();
 
     // Create the CrsMatrix version of the polynomial.
-    Teuchos::RCP<const Tpetra::Map<int,GlobalOrdinal> > col_map = 
-	Tpetra::createLocalMap<int,GlobalOrdinal>( poly_size, comm );
-    Teuchos::RCP<Tpetra::CrsMatrix<double,int,GlobalOrdinal> > P_crs = Teuchos::rcp(
-	new Tpetra::CrsMatrix<double,int,GlobalOrdinal>( 
-	    row_map, col_map, poly_size, Tpetra::StaticProfile) );
+    Teuchos::RCP<const Tpetra::Map<int, GlobalOrdinal>> col_map =
+        Tpetra::createLocalMap<int, GlobalOrdinal>( poly_size, comm );
+    Teuchos::RCP<Tpetra::CrsMatrix<double, int, GlobalOrdinal>> P_crs =
+        Teuchos::rcp( new Tpetra::CrsMatrix<double, int, GlobalOrdinal>(
+            row_map, col_map, poly_size, Tpetra::StaticProfile ) );
     Teuchos::Array<int> crs_indices( poly_size );
     for ( int j = 0; j < poly_size; ++j )
     {
-	crs_indices[j] = j;
+        crs_indices[j] = j;
     }
     Teuchos::Array<double> crs_values( poly_size );
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double> > poly_view = 
-	P->get2dView();
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> poly_view =
+        P->get2dView();
     for ( int i = 0; i < local_size; ++i )
     {
-	for ( int j = 0; j < poly_size; ++j )
-	{
-	    crs_values[j] = poly_view[j][i];
-	}
-	P_crs->insertLocalValues( i, crs_indices(), crs_values() );
+        for ( int j = 0; j < poly_size; ++j )
+        {
+            crs_values[j] = poly_view[j][i];
+        }
+        P_crs->insertLocalValues( i, crs_indices(), crs_values() );
     }
-    P_crs->fillComplete();    
+    P_crs->fillComplete();
 
     // Create the PolynomialMatrix version of the polynomial.
-    DataTransferKit::PolynomialMatrix<double,int,GlobalOrdinal, DeviceType> P_poly_mat( P, row_map, row_map );
+    DataTransferKit::PolynomialMatrix<double, int, GlobalOrdinal, DeviceType>
+        P_poly_mat( P, row_map, row_map );
 
     // Build a random vector to apply the matrices to.
-    Teuchos::RCP<Tpetra::MultiVector<double,int,GlobalOrdinal> > X =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal>( row_map, num_vec );
+    Teuchos::RCP<Tpetra::MultiVector<double, int, GlobalOrdinal>> X =
+        Tpetra::createMultiVector<double, int, GlobalOrdinal>( row_map,
+                                                               num_vec );
     X->randomize();
 
     // Transpose apply the CrsMatrix.
-    Teuchos::RCP<Tpetra::MultiVector<double,int,GlobalOrdinal> > Y_crs =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal>( row_map, num_vec );
+    Teuchos::RCP<Tpetra::MultiVector<double, int, GlobalOrdinal>> Y_crs =
+        Tpetra::createMultiVector<double, int, GlobalOrdinal>( row_map,
+                                                               num_vec );
     Y_crs->randomize();
     P_crs->apply( *X, *Y_crs, Teuchos::TRANS );
 
     // Transpose apply the polynomial matrix.
     auto Y_poly_mat =
-	Tpetra::createMultiVector<double,int,GlobalOrdinal,DeviceType>( row_map, num_vec );
+        Tpetra::createMultiVector<double, int, GlobalOrdinal, DeviceType>(
+            row_map, num_vec );
     Y_poly_mat->randomize();
     P_poly_mat.apply( *X, *Y_poly_mat, Teuchos::TRANS );
 
     // Check the results.
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double> > y_crs_view = 
-	Y_crs->get2dView();
-    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double> > y_pm_view = 
-	Y_poly_mat->get2dView();
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> y_crs_view =
+        Y_crs->get2dView();
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<const double>> y_pm_view =
+        Y_poly_mat->get2dView();
     for ( int i = 0; i < num_vec; ++i )
     {
-	for ( int j = 0; j < local_size; ++j )
-	{
-	    TEST_FLOATING_EQUALITY( y_crs_view[i][j], y_pm_view[i][j], epsilon_rel );
-	    TEST_COMPARE( std::abs(y_crs_view[i][j] - y_pm_view[i][j]), <= , epsilon_abs );
-	}
+        for ( int j = 0; j < local_size; ++j )
+        {
+            TEST_FLOATING_EQUALITY( y_crs_view[i][j], y_pm_view[i][j],
+                                    epsilon_rel );
+            TEST_COMPARE( std::abs( y_crs_view[i][j] - y_pm_view[i][j] ), <=,
+                          epsilon_abs );
+        }
     }
 }
 

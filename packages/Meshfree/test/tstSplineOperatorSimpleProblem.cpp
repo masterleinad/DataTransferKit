@@ -32,10 +32,11 @@ template <typename DeviceType,
 class SplineOperator
 {
   public:
-    SplineOperator( std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
-             &source_points,
-         std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
-             &target_points );
+    SplineOperator(
+        std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
+            &source_points,
+        std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
+            &target_points );
 
     void apply( std::vector<double> const &source_values,
                 std::vector<double> &target_values );
@@ -48,11 +49,12 @@ class SplineOperator
 
 template <typename DeviceType, typename RadialBasisFunction,
           typename PolynomialBasis>
-SplineOperator<DeviceType, RadialBasisFunction, PolynomialBasis>::SplineOperator(
-    std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
-        &source_points,
-    std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
-        &target_points )
+SplineOperator<DeviceType, RadialBasisFunction, PolynomialBasis>::
+    SplineOperator(
+        std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
+            &source_points,
+        std::vector<std::array<DataTransferKit::Coordinate, DIM>> const
+            &target_points )
 {
     unsigned int const n_source_points = source_points.size();
     Kokkos::View<DataTransferKit::Coordinate **, DeviceType> sources(

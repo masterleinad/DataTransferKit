@@ -118,8 +118,7 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     for ( LO i = 0; i < num_points; ++i )
         for ( int j = offset( i ); j < offset( i + 1 ); ++j )
         {
-            const auto row_index =
-                row_map->getGlobalElement( i );
+            const auto row_index = row_map->getGlobalElement( i );
             const auto col_index =
                 cumulative_points_per_process[ranks( j )] + indices( j );
             const auto value = phi( j );
@@ -157,15 +156,18 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     for ( LO i = 0; i < n; ++i )
     {
         const auto global_id = range_map->getGlobalElement( i );
-	std::cout << "polynomial( " << global_id << ", 0) 1." << std::endl;
-        std::cout << "polynomial( " << i << ", 0) 1." << std::endl;
+        /*	std::cout << "polynomial( " << global_id << ", 0) 1." <<
+           std::endl; std::cout << "polynomial( " << i << ", 0) 1." <<
+           std::endl;*/
         v->replaceGlobalValue( global_id, 0, 1.0 );
         for ( int d = 0; d < spatial_dim; ++d )
-	{
+        {
             v->replaceGlobalValue( global_id, d + 1, points( i, d ) );
-            std::cout << "polynomial( " << global_id << ", " << d+1 << ") " << points(i,d) << std::endl;
-            std::cout << "polynomial( " << global_id << ", " << d+1 << ") " << points(i,d) << std::endl;
-	}
+            /*            std::cout << "polynomial( " << global_id << ", " <<
+               d+1 << ") " << points(i,d) << std::endl; std::cout <<
+               "polynomial( " << global_id << ", " << d+1 << ") " << points(i,d)
+               << std::endl;*/
+        }
     }
     return Teuchos::rcp(
         new PolynomialMatrix<SC, LO, GO, NO>( v, domain_map, range_map ) );
