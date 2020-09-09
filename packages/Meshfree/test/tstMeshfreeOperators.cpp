@@ -474,29 +474,16 @@ using Quadratic3 =
     TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           single_point_in_radius,              \
                                           MLS_Wendland0_Quadratic3_##NODE )    \
-    using Spline_Wendland0_Constant3_##NODE =                                  \
-        DataTransferKit::SplineOperator<typename NODE::device_type, Wendland0, \
-                                        Constant3>;                            \
     using Spline_Wendland0_Linear3_##NODE =                                    \
         DataTransferKit::SplineOperator<typename NODE::device_type, Wendland0, \
                                         Linear3>;                              \
     TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           same_npoints_and_basis,              \
-                                          Spline_Wendland0_Constant3_##NODE )  \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
-                                          same_npoints_and_basis,              \
                                           Spline_Wendland0_Linear3_##NODE )    \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, line,              \
-                                          Spline_Wendland0_Constant3_##NODE )  \
     TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, line,              \
                                           Spline_Wendland0_Linear3_##NODE )    \
     TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, grid,              \
-                                          Spline_Wendland0_Constant3_##NODE )  \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator, grid,              \
                                           Spline_Wendland0_Linear3_##NODE )    \
-    TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
-                                          single_point_in_radius,              \
-                                          Spline_Wendland0_Constant3_##NODE )  \
     TEUCHOS_UNIT_TEST_TEMPLATE_1_INSTANT( MeshfreeOperator,                    \
                                           single_point_in_radius,              \
                                           Spline_Wendland0_Linear3_##NODE )

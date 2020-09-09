@@ -42,6 +42,9 @@ template <typename DeviceType,
           typename PolynomialBasis = MultivariatePolynomialBasis<Linear, 3>>
 class SplineOperator : public PointCloudOperator<DeviceType>
 {
+    static_assert( std::is_same<PolynomialBasis,
+                                MultivariatePolynomialBasis<Linear, 3>>::value,
+                   "Only implemented for linear basis functions!" );
     using LO = int;
     using GO = long long;
     // using NO = Kokkos::Compat::KokkosDeviceWrapperNode<DeviceType>;

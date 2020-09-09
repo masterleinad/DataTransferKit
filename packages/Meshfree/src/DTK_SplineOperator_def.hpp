@@ -48,8 +48,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 {
     bool const is_M = ( source_points == target_points );
 
-    const int spatial_dim = target_points.extent( 1 );
-
     auto teuchos_comm = domain_map->getComm();
     auto teuchos_mpi_comm =
         Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int>>( teuchos_comm );
