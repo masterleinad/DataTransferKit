@@ -72,19 +72,19 @@ class SplineProlongationOperator
     // Constructor.
     SplineProlongationOperator( const int num_polynomial_dofs,
                                 const Teuchos::RCP<const Map> &domain_map )
-        : d_domain_map( domain_map )
+        : _domain_map( domain_map )
     {
         // Create a range map.
         Teuchos::ArrayView<const GlobalOrdinal> domain_elements =
-            d_domain_map->getNodeElementList();
-        d_lda = domain_elements.size();
+            _domain_map->getNodeElementList();
+        _lda = domain_elements.size();
 
         const auto old_size = domain_elements.size();
         Teuchos::Array<GlobalOrdinal> global_ids( old_size +
                                                   num_polynomial_dofs );
-        if ( d_domain_map->getComm()->getRank() == 0 )
+        if ( _domain_map->getComm()->getRank() == 0 )
         {
-            GlobalOrdinal max_id = d_domain_map->getMaxAllGlobalIndex() + 1;
+            GlobalOrdinal max_id = _domain_map->getMaxAllGlobalIndex() + 1;
 
             global_ids( 0, old_size ).assign( domain_elements );
             for ( int i = 0; i < num_polynomial_dofs; ++i )
@@ -93,22 +93,22 @@ class SplineProlongationOperator
             }
             domain_elements = global_ids();
         }
-        d_range_map = Tpetra::createNonContigMapWithNode<LocalOrdinal,
-                                                         GlobalOrdinal, Node>(
-            domain_elements, d_domain_map->getComm() );
-        DTK_ENSURE( Teuchos::nonnull( d_range_map ) );
+        _range_map = Tpetra::createNonContigMapWithNode<LocalOrdinal,
+                                                        GlobalOrdinal, Node>(
+            domain_elements, _domain_map->getComm() );
+        DTK_ENSURE( Teuchos::nonnull( _range_map ) );
     }
 
     //! The Map associated with the domain of this operator, which must be
     //! compatible with X.getMap().
     Teuchos::RCP<const Map> getDomainMap() const override
     {
-        return d_domain_map;
+        return _domain_map;
     }
 
     //! The Map associated with the range of this operator, which must be
     //! compatible with Y.getMap().
-    Teuchos::RCP<const Map> getRangeMap() const override { return d_range_map; }
+    Teuchos::RCP<const Map> getRangeMap() const override { return _range_map; }
 
     //! \brief Computes the operator-multivector application.
     /*! Loosely, performs \f$Y = \alpha \cdot A^{\textrm{mode}} \cdot X +
@@ -125,37 +125,35 @@ class SplineProlongationOperator
            Scalar alpha = Teuchos::ScalarTraits<Scalar>::one(),
            Scalar beta = Teuchos::ScalarTraits<Scalar>::zero() ) const override
     {
-        DTK_REQUIRE( d_domain_map->isSameAs( *( X.getMap() ) ) );
-        DTK_REQUIRE( d_range_map->isSameAs( *( Y.getMap() ) ) );
+        DTK_REQUIRE( _domain_map->isSameAs( *( X.getMap() ) ) );
+        DTK_REQUIRE( _range_map->isSameAs( *( Y.getMap() ) ) );
         DTK_REQUIRE( X.getNumVectors() == Y.getNumVectors() );
 
-        Y.scale( beta );
+        using DeviceType = typename Node::device_type;
+        using ExecutionSpace = typename DeviceType::execution_space;
 
-        Teuchos::ArrayRCP<Teuchos::ArrayRCP<const Scalar>> X_view =
-            X.get2dView();
-        Teuchos::ArrayRCP<Teuchos::ArrayRCP<Scalar>> Y_view =
-            Y.get2dViewNonConst();
-        for ( unsigned n = 0; n < X.getNumVectors(); ++n )
-        {
-            for ( int i = 0; i < d_lda; ++i )
-            {
-                Y_view[n][i] += alpha * X_view[n][i];
-            }
-        }
+        auto x_view = X.template getLocalView<DeviceType>();
+        auto y_view = Y.template getLocalView<DeviceType>();
+
+        auto const n = x_view.extent_int( 0 );
+        auto const num_vectors = x_view.extent_int( 1 );
+
+        Y.scale( beta );
+        Kokkos::parallel_for( DTK_MARK_REGION( "spline_prolongation::apply" ),
+                              Kokkos::RangePolicy<ExecutionSpace>( 0, _lda ),
+                              KOKKOS_LAMBDA( int const i ) {
+                                  for ( int j = 0; j < num_vectors; ++j )
+                                      y_view( i, j ) = alpha * x_view( i, j );
+                              } );
     }
     /// \brief Whether this operator supports applying the transpose or
     /// conjugate transpose.
     bool hasTransposeApply() const override { return false; }
 
   private:
-    // LDA
-    int d_lda;
-
-    // Domain map.
-    Teuchos::RCP<const Map> d_domain_map;
-
-    // Range map.
-    Teuchos::RCP<const Map> d_range_map;
+    int _lda;
+    Teuchos::RCP<const Map> _domain_map;
+    Teuchos::RCP<const Map> _range_map;
 };
 
 //---------------------------------------------------------------------------//
