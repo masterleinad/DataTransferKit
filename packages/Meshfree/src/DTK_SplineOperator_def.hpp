@@ -46,8 +46,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
         Kokkos::View<Coordinate const **, DeviceType> target_points,
         int const knn )
 {
-    bool const is_M = ( source_points == target_points );
-
     auto teuchos_comm = domain_map->getComm();
     auto teuchos_mpi_comm =
         Teuchos::rcp_dynamic_cast<const Teuchos::MpiComm<int>>( teuchos_comm );
@@ -262,6 +260,11 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     // Create the coupling matrix A = (B * C^-1 * S).
     _thyra_operator = Thyra::multiply<SC>( thyra_B, thyra_C_inv, thyra_S );
     DTK_ENSURE( Teuchos::nonnull( _thyra_operator ) );
+
+    _source = Teuchos::rcp( new Vector( S->getDomainMap(), 1 ) );
+    _destination = Teuchos::rcp( new Vector( N->getRangeMap(), 1 ) );
+    _thyra_X = Thyra::createMultiVector<SC>( _source );
+    _thyra_Y = Thyra::createMultiVector<SC>( _destination );
 }
 
 template <typename DeviceType, typename CompactlySupportedRadialBasisFunction,
@@ -272,26 +275,20 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
            Kokkos::View<double *, DeviceType> target_values ) const
 {
     // Precondition: check that the source and the target are properly sized
-    // DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
-    // DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
-
-    auto domain_map = S->getDomainMap();
-    auto range_map = N->getRangeMap();
-
-    auto source = Teuchos::rcp( new Vector( domain_map, 1 ) );
-    auto destination = Teuchos::rcp( new Vector( range_map, 1 ) );
+    DTK_REQUIRE( source_values.extent( 0 ) ==
+                 S->getDomainMap()->getNodeNumElements() );
+    DTK_REQUIRE( target_values.extent( 0 ) ==
+                 N->getRangeMap()->getNodeNumElements() );
 
     Kokkos::deep_copy(
-        Kokkos::subview( source->getLocalViewDevice(), Kokkos::ALL, 0 ),
+        Kokkos::subview( _source->getLocalViewDevice(), Kokkos::ALL, 0 ),
         source_values );
 
-    auto thyra_X = Thyra::createMultiVector<SC>( source );
-    auto thyra_Y = Thyra::createMultiVector<SC>( destination );
-    _thyra_operator->apply( Thyra::NOTRANS, *thyra_X, thyra_Y.ptr(), 1, 0 );
+    _thyra_operator->apply( Thyra::NOTRANS, *_thyra_X, _thyra_Y.ptr(), 1, 0 );
 
     Kokkos::deep_copy(
         target_values,
-        Kokkos::subview( destination->getLocalViewDevice(), Kokkos::ALL, 0 ) );
+        Kokkos::subview( _destination->getLocalViewDevice(), Kokkos::ALL, 0 ) );
 }
 
 } // end namespace DataTransferKit

@@ -47,7 +47,8 @@ class SplineOperator : public PointCloudOperator<DeviceType>
                    "Only implemented for linear basis functions!" );
     using LO = int;
     using GO = long long;
-    using NO = Kokkos::Compat::KokkosDeviceWrapperNode<typename DeviceType::execution_space>;
+    using NO = Kokkos::Compat::KokkosDeviceWrapperNode<
+        typename DeviceType::execution_space>;
     using SC = Coordinate;
 
     using CrsMatrix = Tpetra::CrsMatrix<SC, LO, GO, NO>;
@@ -90,6 +91,18 @@ class SplineOperator : public PointCloudOperator<DeviceType>
 
     // Coupling matrix
     Teuchos::RCP<const Thyra::LinearOpBase<SC>> _thyra_operator;
+
+    // Source vector
+    Teuchos::RCP<Vector> _source;
+
+    // Destination vector
+    Teuchos::RCP<Vector> _destination;
+
+    // Source vector
+    Teuchos::RCP<Thyra::MultiVectorBase<SC>> _thyra_X;
+
+    // Destination vector
+    Teuchos::RCP<Thyra::MultiVectorBase<SC>> _thyra_Y;
 
     Teuchos::RCP<Operator> buildPolynomialOperator(
         Teuchos::RCP<const Map> domain_map, Teuchos::RCP<const Map> range_map,
