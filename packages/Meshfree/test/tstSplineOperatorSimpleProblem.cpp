@@ -122,34 +122,34 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( SplineOperatorSimpleProblem, corner_cases,
     // single point
     {
         std::vector<std::array<DataTransferKit::Coordinate, DIM>>
-            source_points = {{.5, .25, .125}, {.5, .5, .5}};
+            source_points = {{1., 1., 1.}};
         std::vector<std::array<DataTransferKit::Coordinate, DIM>>
-            target_points = {{.5, .25, .125}, {.5, .5, .5}};
+            target_points = {{1., 1., 1.}};
         SplineOperator<DeviceType> mls( source_points, target_points );
 
-        std::vector<double> source_values = {255., 128};
-        std::vector<double> target_values = {0., 0.};
+        std::vector<double> source_values = {255.};
+        std::vector<double> target_values = {0.};
         mls.apply( source_values, target_values );
 
-        std::vector<double> ref_values = {255., 128};
+        std::vector<double> ref_values = {255.};
         checkResults( target_values, ref_values, out, success );
     }
 
     // One source point but no target point.
-    /*    {
-            std::vector<std::array<DataTransferKit::Coordinate, DIM>>
-                source_points = {{1., 1., 1.}};
-            std::vector<std::array<DataTransferKit::Coordinate, DIM>>
-                target_points = {};
-            SplineOperator<DeviceType> mls( source_points, target_points );
+    {
+        std::vector<std::array<DataTransferKit::Coordinate, DIM>>
+            source_points = {{1., 1., 1.}};
+        std::vector<std::array<DataTransferKit::Coordinate, DIM>>
+            target_points = {};
+        SplineOperator<DeviceType> mls( source_points, target_points );
 
-            std::vector<double> source_values = {255.};
-            std::vector<double> target_values = {};
-            mls.apply( source_values, target_values );
+        std::vector<double> source_values = {255.};
+        std::vector<double> target_values = {};
+        mls.apply( source_values, target_values );
 
-            std::vector<double> ref_values = {};
-            checkResults( target_values, ref_values, out, success );
-        }*/
+        std::vector<double> ref_values = {};
+        checkResults( target_values, ref_values, out, success );
+    }
 }
 
 // Include the test macros.
