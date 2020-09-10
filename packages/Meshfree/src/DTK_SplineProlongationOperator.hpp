@@ -132,8 +132,8 @@ class SplineProlongationOperator
         using DeviceType = typename Node::device_type;
         using ExecutionSpace = typename DeviceType::execution_space;
 
-        auto x_view = X.template getLocalView<DeviceType>();
-        auto y_view = Y.template getLocalView<DeviceType>();
+        auto x_view = X.getLocalViewDevice();
+        auto y_view = Y.getLocalViewDevice();
 
         auto const n = x_view.extent_int( 0 );
         auto const num_vectors = x_view.extent_int( 1 );

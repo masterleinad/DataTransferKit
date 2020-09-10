@@ -278,7 +278,6 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
            Kokkos::View<double *, DeviceType> target_values ) const
 {
     // Precondition: check that the source and the target are properly sized
-    // DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
     DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
 
     auto domain_map = S->getDomainMap();
@@ -287,20 +286,17 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     auto source = Teuchos::rcp( new Vector( domain_map, 1 ) );
     auto destination = Teuchos::rcp( new Vector( range_map, 1 ) );
 
-    // copy source_values to source
-    for ( unsigned int i = 0; i < source_values.extent( 0 ); ++i )
-    {
-        const auto global_id = domain_map->getGlobalElement( i );
-        source->replaceGlobalValue( global_id, 0, source_values( i ) );
-    }
+    Kokkos::deep_copy(
+        Kokkos::subview( source->getLocalViewDevice(), Kokkos::ALL, 0 ),
+        source_values );
 
     auto thyra_X = Thyra::createMultiVector<SC>( source );
     auto thyra_Y = Thyra::createMultiVector<SC>( destination );
     _thyra_operator->apply( Thyra::NOTRANS, *thyra_X, thyra_Y.ptr(), 1, 0 );
 
-    // copy solution to target_values
-    for ( unsigned int i = 0; i < target_values.size(); ++i )
-        target_values( i ) = destination->getLocalViewHost()( i, 0 );
+    Kokkos::deep_copy(
+        target_values,
+        Kokkos::subview( destination->getLocalViewDevice(), Kokkos::ALL, 0 ) );
 }
 
 } // end namespace DataTransferKit
