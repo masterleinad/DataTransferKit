@@ -47,7 +47,8 @@ class SplineOperator : public PointCloudOperator<DeviceType>
                    "Only implemented for linear basis functions!" );
     using LO = int;
     using GO = long long;
-    using NO = Kokkos::Compat::KokkosDeviceWrapperNode<typename DeviceType::execution_space>;
+    using NO = Kokkos::Compat::KokkosDeviceWrapperNode<
+        typename DeviceType::execution_space>;
     using SC = Coordinate;
 
     using CrsMatrix = Tpetra::CrsMatrix<SC, LO, GO, NO>;

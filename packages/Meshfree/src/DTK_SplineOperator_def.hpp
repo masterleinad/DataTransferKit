@@ -142,17 +142,9 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
 
     DTK_REQUIRE( spatial_dim == 3 );
 
-    auto v = Teuchos::rcp( new Vector( range_map, spatial_dim + 1 ) );
+    auto v = Details::MovingLeastSquaresOperatorImpl<
+        DeviceType>::computeVandermonde2( points, PolynomialBasis() );
 
-    for ( LO i = 0; i < n; ++i )
-    {
-        const auto global_id = range_map->getGlobalElement( i );
-        v->replaceGlobalValue( global_id, 0, 1.0 );
-        for ( int d = 0; d < spatial_dim; ++d )
-        {
-            v->replaceGlobalValue( global_id, d + 1, points( i, d ) );
-        }
-    }
     return Teuchos::rcp(
         new PolynomialMatrix<SC, LO, GO, NO>( v, domain_map, range_map ) );
 }
