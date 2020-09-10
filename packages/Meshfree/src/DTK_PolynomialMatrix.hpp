@@ -166,20 +166,9 @@ class PolynomialMatrix
                     {
                         y_view[n][i] +=
                             alpha * poly_view[p][i] * x_poly[stride + p];
-			//std::cout << "p(" << p << ", " << i << ") " << poly_view[p][i] << std::endl;
                     }
                 }
             }
-
-            /*for ( int n = 0; n < num_vec; ++n )
-            {
-                stride = n * poly_size;
-
-                for ( int i = 0; i < local_length; ++i )
-                {
-			    std::cout << "y(" << n << "," << i << ") " << y_view[n][i] << std::endl;
-                }
-            }*/
         }
 
         // Transpose.
@@ -207,7 +196,6 @@ class PolynomialMatrix
                     {
                         products[stride + p] +=
                             poly_view[p][i] * work_view[n][i];
-                       //std::cout << "p^T(" << p << ", " << i << ") " << poly_view[p][i] << std::endl;
                     }
                 }
             }
@@ -246,26 +234,6 @@ class PolynomialMatrix
         {
             DTK_INSIST( mode == Teuchos::NO_TRANS || mode == Teuchos::TRANS );
         }
-
-	if (mode== Teuchos::NO_TRANS)
-		std::cout << "notrans" << std::endl;
-	else
-		std::cout << "trans" << std::endl;
-
-	const auto map_X = X.getMap();
-        const auto map_Y = Y.getMap();
-	const auto local_X = X.get2dView();
-	const auto local_Y = Y.get2dView();
-	for (unsigned int i=0; i<X.getLocalLength(); ++i)
-          for (unsigned int j = 0; j<X.getNumVectors(); ++j)
-		{
-			std::cout << "X(" << map_X->getGlobalElement(i) << "," << j << ") " << local_X[j][i] << std::endl;
-		}
-	for (unsigned int i=0; i<Y.getLocalLength(); ++i)
-          for (unsigned int j = 0; j<Y.getNumVectors(); ++j)
-                {
-                        std::cout << "Y(" << map_Y->getGlobalElement(i) << "," << j << ") " << local_Y[j][i] << std::endl;
-                }
     }
 
     /// \brief Whether this operator supports applying the transpose or
