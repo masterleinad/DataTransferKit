@@ -107,12 +107,6 @@ SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
     auto row_map = range_map;
     auto crs_matrix = Teuchos::rcp( new CrsMatrix( row_map, knn ) );
 
-    if ( is_M )
-    {
-        _ranks = ranks;
-        _indices = indices;
-    }
-
     for ( LO i = 0; i < num_points; ++i )
         for ( int j = offset( i ); j < offset( i + 1 ); ++j )
         {
@@ -278,7 +272,8 @@ void SplineOperator<DeviceType, CompactlySupportedRadialBasisFunction,
            Kokkos::View<double *, DeviceType> target_values ) const
 {
     // Precondition: check that the source and the target are properly sized
-    DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
+    // DTK_REQUIRE( source_values.extent( 0 ) == _n_source_points );
+    // DTK_REQUIRE( target_values.extent( 0 ) == target_offset.extent( 0 ) - 1 );
 
     auto domain_map = S->getDomainMap();
     auto range_map = N->getRangeMap();
