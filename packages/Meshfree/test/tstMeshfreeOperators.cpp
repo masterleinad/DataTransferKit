@@ -26,6 +26,8 @@
 #include <vector>
 
 int constexpr DIM = 3;
+int constexpr POINT_PER_DIM = 400;
+int constexpr TARGET_PER_DIM = 390;
 
 template <typename DeviceType>
 struct Helper
@@ -97,7 +99,8 @@ struct Helper
 
     static std::vector<std::array<double, DIM>>
     makeGridPoints( std::array<int, DIM> const &n_points,
-                    std::array<double, DIM> const &offset )
+		    std::array<double, DIM> const &lower_corner,
+                    std::array<double, DIM> const &upper_corner )
     {
         static_assert( DIM == 3, "Assume three dimensional geometry" );
 
@@ -110,7 +113,9 @@ struct Helper
                 for ( int k = 0; k < n_points[2]; ++k )
                 {
                     std::array<double, DIM> point = {
-                        offset[0] + i, offset[1] + j, offset[2] + k};
+                        lower_corner[0]+(upper_corner[0]-lower_corner[0])/(n_points[0]+1)*(i+1),
+                        lower_corner[1]+(upper_corner[1]-lower_corner[1])/(n_points[1]+1)*(j+1),
+			lower_corner[2]+(upper_corner[2]-lower_corner[2])/(n_points[2]+1)*(k+1) };
                     grid_points.push_back( point );
                 }
             }
@@ -150,7 +155,7 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, same_npoints_and_basis,
     int comm_rank;
     MPI_Comm_rank( comm, &comm_rank );
 
-    const int n_target_points = 10;
+    const int n_target_points = TARGET_PER_DIM;
     const double radius = 1.0;
 
     const int n_source_points_in_radius = PolynomialBasis::size;
@@ -169,26 +174,10 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, same_npoints_and_basis,
         0.5 * radius, comm_rank );
 
     // Arbitrary function of the specified order
-    std::function<double( std::array<double, DIM> )> f;
-    switch ( PolynomialBasis::size )
-    {
-    case 1: // constant
-        f = []( std::array<double, DIM> ) -> double { return 3.0; };
-        break;
-    case 4: // linear
-        f = []( std::array<double, DIM> p ) -> double {
-            return 4 + 2 * p[0] + 3 * p[1] - 2 * p[2];
-        };
-        break;
-    case 10: // quadratic
-        f = []( std::array<double, DIM> p ) -> double {
+    std::function<double( std::array<double, DIM> )> f = []( std::array<double, DIM> p ) -> double {
             return 2 + 3 * p[0] - 5 * p[1] + 2 * p[2] + 3 * p[0] * p[0] +
                    4 * p[0] * p[1] - 2 * p[0] * p[2] + p[1] * p[1] -
                    3 * p[1] * p[2] + 4 * p[2] * p[2];
-        };
-        break;
-    default:
-        throw;
     };
 
     for ( int i = 0; i < n_source_points; i++ )
@@ -207,7 +196,12 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, same_npoints_and_basis,
 
     auto target_values_host = Kokkos::create_mirror_view( target_values );
     Kokkos::deep_copy( target_values_host, target_values );
-    TEST_COMPARE_FLOATING_ARRAYS( target_values_host, target_values_ref, 1e-7 );
+
+    double total_error = 0.;
+    for (unsigned int i=0; i<target_values_host.extent(0); ++i)
+            total_error =+ std::abs(target_values_host(i)-target_values_ref[i]);
+    total_error /= target_values_host.extent(0);
+    TEST_FLOATING_EQUALITY(total_error, 0., 1e-9);
 }
 
 TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, grid, Operator )
@@ -215,21 +209,20 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, grid, Operator )
     using namespace DataTransferKit;
 
     using DeviceType = typename Operator::device_type;
-    using PolynomialBasis = typename Operator::polynomial_basis;
 
     MPI_Comm comm = MPI_COMM_WORLD;
     int comm_rank;
     MPI_Comm_rank( comm, &comm_rank );
 
-    std::array<int, DIM> n_source_points_grid = {40, 40, 1};
-    std::array<double, DIM> offset = {0., 0., static_cast<double>( comm_rank )};
+    std::array<int, DIM> n_source_points_grid = {POINT_PER_DIM, POINT_PER_DIM, 1};
+    std::array<double, DIM> lower = {0., 0., static_cast<double>( comm_rank )};
+    std::array<double, DIM> upper = {1., 1., 1.};
     auto source_points_arr =
-        Helper<DeviceType>::makeGridPoints( n_source_points_grid, offset );
+        Helper<DeviceType>::makeGridPoints( n_source_points_grid, lower, upper );
 
-    std::array<int, DIM> n_target_points_grid = {1, 1, 1};
-    offset = {19, 19., static_cast<double>( comm_rank )};
+    std::array<int, DIM> n_target_points_grid = {TARGET_PER_DIM, TARGET_PER_DIM, 1};
     auto target_points_arr =
-        Helper<DeviceType>::makeGridPoints( n_target_points_grid, offset );
+        Helper<DeviceType>::makeGridPoints( n_target_points_grid, lower, upper );
 
     unsigned int const n_source_points = source_points_arr.size();
     unsigned int const n_target_points = target_points_arr.size();
@@ -238,26 +231,10 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, grid, Operator )
     std::vector<double> target_values_ref( n_target_points );
 
     // Arbitrary function of the specified order
-    std::function<double( std::array<double, DIM> )> f;
-    switch ( PolynomialBasis::size )
-    {
-    case 1: // constant
-        f = []( std::array<double, DIM> ) -> double { return 3.0; };
-        break;
-    case 4: // linear
-        f = []( std::array<double, DIM> p ) -> double {
-            return 4 + 2 * p[0] + 3 * p[1] - 2 * p[2];
-        };
-        break;
-    case 10: // quadratic
-        f = []( std::array<double, DIM> p ) -> double {
+    std::function<double( std::array<double, DIM> )> f = []( std::array<double, DIM> p ) -> double {
             return 2 + 3 * p[0] - 5 * p[1] + 2 * p[2] + 3 * p[0] * p[0] +
                    4 * p[0] * p[1] - 2 * p[0] * p[2] + p[1] * p[1] -
                    3 * p[1] * p[2] + 4 * p[2] * p[2];
-        };
-        break;
-    default:
-        throw;
     };
 
     for ( unsigned int i = 0; i < n_source_points; ++i )
@@ -276,7 +253,12 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, grid, Operator )
 
     auto target_values_host = Kokkos::create_mirror_view( target_values );
     Kokkos::deep_copy( target_values_host, target_values );
-    TEST_COMPARE_FLOATING_ARRAYS( target_values_host, target_values_ref, 1e-9 );
+
+    double total_error = 0.;
+    for (unsigned int i=0; i<target_values_host.extent(0); ++i)
+            total_error =+ std::abs(target_values_host(i)-target_values_ref[i]);
+    total_error /= target_values_host.extent(0);
+    TEST_FLOATING_EQUALITY(total_error, 0., 1e-9);
 }
 
 TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, line, Operator )
@@ -284,21 +266,21 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, line, Operator )
     using namespace DataTransferKit;
 
     using DeviceType = typename Operator::device_type;
-    using PolynomialBasis = typename Operator::polynomial_basis;
 
     MPI_Comm comm = MPI_COMM_WORLD;
     int comm_rank;
     MPI_Comm_rank( comm, &comm_rank );
 
-    std::array<int, DIM> n_source_points_grid = {40, 1, 1};
-    std::array<double, DIM> offset = {0., 0., static_cast<double>( comm_rank )};
+    //FXIME MPI
+    std::array<int, DIM> n_source_points_grid = {POINT_PER_DIM, 1, 1};
+    std::array<double, DIM> lower = {0., 0., static_cast<double>( comm_rank )};
+    std::array<double, DIM> upper = {1.,1.,1.};
     auto source_points_arr =
-        Helper<DeviceType>::makeGridPoints( n_source_points_grid, offset );
+        Helper<DeviceType>::makeGridPoints( n_source_points_grid, lower, upper );
 
-    std::array<int, DIM> n_target_points_grid = {39, 1, 1};
-    offset = {0.5, 0., static_cast<double>( comm_rank )};
+    std::array<int, DIM> n_target_points_grid = {TARGET_PER_DIM, 1, 1};
     auto target_points_arr =
-        Helper<DeviceType>::makeGridPoints( n_target_points_grid, offset );
+        Helper<DeviceType>::makeGridPoints( n_target_points_grid, lower, upper );
 
     unsigned int const n_source_points = source_points_arr.size();
     unsigned int const n_target_points = target_points_arr.size();
@@ -307,26 +289,10 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, line, Operator )
     std::vector<double> target_values_ref( n_target_points );
 
     // Arbitrary function of the specified order
-    std::function<double( std::array<double, DIM> )> f;
-    switch ( PolynomialBasis::size )
-    {
-    case 1: // constant
-        f = []( std::array<double, DIM> ) -> double { return 3.0; };
-        break;
-    case 4: // linear
-        f = []( std::array<double, DIM> p ) -> double {
-            return 4 + 2 * p[0] + 3 * p[1] - 2 * p[2];
-        };
-        break;
-    case 10: // quadratic
-        f = []( std::array<double, DIM> p ) -> double {
+    std::function<double( std::array<double, DIM> )> f = []( std::array<double, DIM> p ) -> double {
             return 2 + 3 * p[0] - 5 * p[1] + 2 * p[2] + 3 * p[0] * p[0] +
                    4 * p[0] * p[1] - 2 * p[0] * p[2] + p[1] * p[1] -
                    3 * p[1] * p[2] + 4 * p[2] * p[2];
-        };
-        break;
-    default:
-        throw;
     };
 
     for ( unsigned int i = 0; i < n_source_points; ++i )
@@ -345,7 +311,12 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, line, Operator )
 
     auto target_values_host = Kokkos::create_mirror_view( target_values );
     Kokkos::deep_copy( target_values_host, target_values );
-    TEST_COMPARE_FLOATING_ARRAYS( target_values_host, target_values_ref, 1e-9 );
+
+    double total_error = 0.;
+    for (unsigned int i=0; i<target_values_host.extent(0); ++i)
+	    total_error =+ std::abs(target_values_host(i)-target_values_ref[i]);
+    total_error /= target_values_host.extent(0);
+    TEST_FLOATING_EQUALITY(total_error, 0., 1e-9);
 }
 
 TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, single_point_in_radius,
@@ -354,13 +325,12 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, single_point_in_radius,
     using namespace DataTransferKit;
 
     using DeviceType = typename Operator::device_type;
-    using PolynomialBasis = typename Operator::polynomial_basis;
 
     MPI_Comm comm = MPI_COMM_WORLD;
     int comm_rank;
     MPI_Comm_rank( comm, &comm_rank );
 
-    const int n_target_points = 10;
+    const int n_target_points = TARGET_PER_DIM;
     const double radius = 1.0;
 
     const int n_source_points_in_radius = 1;
@@ -377,27 +347,10 @@ TEUCHOS_UNIT_TEST_TEMPLATE_1_DECL( MeshfreeOperator, single_point_in_radius,
         source_points_arr, target_points_arr, n_source_points_in_radius,
         0.5 * radius, comm_rank );
 
-    // Arbitrary function of the specified order
-    std::function<double( std::array<double, DIM> )> f;
-    switch ( PolynomialBasis::size )
-    {
-    case 1: // constant
-        f = []( std::array<double, DIM> ) -> double { return 3.0; };
-        break;
-    case 4: // linear
-        f = []( std::array<double, DIM> p ) -> double {
-            return 4 + 2 * p[0] + 3 * p[1] - 2 * p[2];
-        };
-        break;
-    case 10: // quadratic
-        f = []( std::array<double, DIM> p ) -> double {
+    std::function<double( std::array<double, DIM> )> f = []( std::array<double, DIM> p ) -> double {
             return 2 + 3 * p[0] - 5 * p[1] + 2 * p[2] + 3 * p[0] * p[0] +
                    4 * p[0] * p[1] - 2 * p[0] * p[2] + p[1] * p[1] -
                    3 * p[1] * p[2] + 4 * p[2] * p[2];
-        };
-        break;
-    default:
-        throw;
     };
 
     for ( int i = 0; i < n_source_points; i++ )
